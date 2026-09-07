@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+data/
+runs/
+.DS_Store
+*.egg-info/
+
+# Local planning and agent instructions
+/docs/
+/AGENTS.md
+/.agents/
