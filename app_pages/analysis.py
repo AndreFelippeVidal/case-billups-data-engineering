@@ -168,7 +168,7 @@ overview[2].metric("Average recorded amount", f"${total_recorded / total_attempt
 overview[3].metric("Cities", f"{q5_cities['city_id'].nunique():,}")
 overview[4].metric("Months", f"{q5_months['year_month'].nunique():,}")
 st.subheader("Authorization context")
-authorization = st.columns(3)
+authorization = st.columns(5)
 authorization[0].metric("Approved attempts", f"{approved_attempts:,}")
 authorization[1].metric("Approval rate", f"{approved_attempts / total_attempts:.1%}")
 authorization[2].metric("Approved amount", f"${total_approved:,.2f}")
@@ -287,12 +287,6 @@ with tab5:
             "Approved Amount": currency_column("Approved Amount"),
             "Approved Share": st.column_config.NumberColumn("Approved Share", format="percent"),
         })
-        st.subheader("c. Interesting months")
-        st.write(
-            f"The strongest months per observed day are {leading_months}. This exposure-adjusted comparison "
-            "accounts for partial boundary months; the peaks do not prove annual seasonality."
-        )
-        st.line_chart(q5_months.set_index("year_month")["approved_amount_per_observed_day"])
     with right:
         st.subheader("b. Categories to sell")
         st.write(
@@ -314,6 +308,15 @@ with tab5:
             "Approved Amount": currency_column("Approved Amount"),
             "Approved Share": st.column_config.NumberColumn("Approved Share", format="percent"),
         })
+    left, right = st.columns(2)
+    with left:
+        st.subheader("c. Interesting months")
+        st.write(
+            f"The strongest months per observed day are {leading_months}. This exposure-adjusted comparison "
+            "accounts for partial boundary months; the peaks do not prove annual seasonality."
+        )
+        st.line_chart(q5_months.set_index("year_month")["approved_amount_per_observed_day"])
+    with right:
         st.subheader("d. Recommended opening hours")
         st.write(
             f"Open at {interval['start_hour']:02d}:00 and close at {interval['end_hour']:02d}:00. "
