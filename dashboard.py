@@ -13,6 +13,7 @@ from billups.report import cramers_v, smallest_circular_interval
 
 PROJECT_ROOT = Path(__file__).parent
 GOLD = Path(os.environ.get("BILLUPS_GOLD_DIR", PROJECT_ROOT / "data" / "gold"))
+MONTH_NAMES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 if not GOLD.is_absolute():
     GOLD = PROJECT_ROOT / GOLD
 
@@ -34,6 +35,12 @@ def load_table(name: str) -> pd.DataFrame:
 def currency_column(label: str) -> st.column_config.NumberColumn:
     """Build a dashboard column formatted as US dollars."""
     return st.column_config.NumberColumn(label, format="$%.2f")
+
+
+def month_label(value: str) -> str:
+    """Format a sortable year-month value for presentation."""
+    year, month = value.split("-")
+    return f"{MONTH_NAMES[int(month) - 1]} {year}"
 
 
 def show_table(frame: pd.DataFrame, formats: dict | None = None) -> None:
@@ -110,7 +117,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
 with tab1:
     q1 = load_table("q1_top_merchants")
     months = sorted(q1["year_month"].dropna().unique())
-    selected_month = st.selectbox("Month", months)
+    selected_month = st.selectbox("Month", months, format_func=month_label)
     month_rows = q1[q1["year_month"] == selected_month]
     cities = sorted(month_rows["city_id"].dropna().unique())
     selected_city = st.selectbox("City", cities)
@@ -124,6 +131,7 @@ with tab1:
             "attempt_count": "No of Sales",
         })
     )
+    q1_display["Month"] = q1_display["Month"].map(month_label)
     show_table(q1_display, {"Purchase Total": currency_column("Purchase Total")})
 
 with tab2:

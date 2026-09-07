@@ -6,7 +6,7 @@ Implement in order with `$dimplement T2`, then T3–T5. Use the spec as the sour
 Ten local skills validate with quick_validate.py. Discovery inspected the actual PDF, dictionary, source schema and full-column counts. User confirmed all attempts plus approved sensitivity; English-only repository and uv dependency management.
 
 ## T2 — Reliable Silver [DONE]
-Depends on T1. Implement scripts/download_data.py, billups/transforms.py (Silver functions) and focused tests.
+Depends on T1. Implement billups/download.py, billups/transforms.py (Silver functions) and focused tests.
 - Download the two official files into ignored data/raw using temporary files before rename.
 - Require named columns; preserve source grain. Parse timestamps explicitly and purchase_amount as decimal(28,6).
 - Collapse merchant metadata to one row per merchant_id. If more than one distinct nonblank name exists, use merchant_id and export ambiguity evidence. If none exists or join misses, use merchant_id; null IDs use Unknown merchant.

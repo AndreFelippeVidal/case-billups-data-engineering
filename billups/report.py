@@ -11,6 +11,9 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 
+MONTH_NAMES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
 def cramers_v(rows: list[dict[str, Any]]) -> float:
     """Calculate descriptive Cramer's V from city/category counts."""
     usable = [r for r in rows if r["city_id"] not in (None, -1)]
@@ -74,6 +77,12 @@ def _money(value: Any) -> str:
     return f"{sign}${abs(amount):,.2f}"
 
 
+def _month_label(value: str) -> str:
+    """Format a sortable year-month value for presentation."""
+    year, month = value.split("-")
+    return f"{MONTH_NAMES[int(month) - 1]} {year}"
+
+
 def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, Any]:
     """Render the analytical findings and assumptions as Markdown."""
     q1_sample = _records(gold["q1_top_merchants"].orderBy("year_month", "city_id", "rank"), 5)
@@ -106,7 +115,7 @@ def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, An
         "|---:|---|---:|---|---:|---:|",
     ]
     lines.extend(
-        f"| {row['rank']} | {row['year_month']} | {row['city_id']} | {row['merchant_name']} | {_money(row['total_amount'])} | {row['attempt_count']:,} |"
+        f"| {row['rank']} | {_month_label(row['year_month'])} | {row['city_id']} | {row['merchant_name']} | {_money(row['total_amount'])} | {row['attempt_count']:,} |"
         for row in q1_sample
     )
     lines.extend([

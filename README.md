@@ -44,7 +44,7 @@ For the written analysis, open [results/report.md](results/report.md). The suppo
 The repository does not commit raw, Bronze, or Silver data. Download both official sources atomically into `data/raw`:
 
 ```sh
-uv run python scripts/download_data.py --destination data/raw
+uv run python -m billups.download --destination data/raw
 ```
 
 The command creates these exact paths:
@@ -148,18 +148,6 @@ Run the hand-computable Silver, Gold, report, and edge-case checks:
 
 ```sh
 uv run pytest -q
-```
-
-The pipeline also ships a deterministic synthetic source generator used for end-to-end overwrite verification:
-
-```sh
-uv run python scripts/generate_synthetic_data.py /tmp/billups-synthetic-source
-uv run python -m billups.pipeline \
-  --raw-dir /tmp/billups-synthetic-source \
-  --bronze-dir /tmp/billups-bronze \
-  --silver-dir /tmp/billups-silver \
-  --gold-dir /tmp/billups-gold \
-  --results-dir /tmp/billups-results
 ```
 
 ## Data handling

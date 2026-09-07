@@ -22,7 +22,9 @@ def download(destination: Path) -> None:
         if target.exists():
             print(f"Already present: {target}")
             continue
-        with tempfile.NamedTemporaryFile(dir=destination, prefix=f".{filename}.", delete=False) as temp:
+        with tempfile.NamedTemporaryFile(
+            dir=destination, prefix=f".{filename}.", delete=False
+        ) as temp:
             temporary = Path(temp.name)
         try:
             print(f"Downloading {url}")
@@ -33,7 +35,12 @@ def download(destination: Path) -> None:
             raise
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Download official inputs from the command line."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--destination", type=Path, default=Path("data/raw"))
     download(parser.parse_args().destination)
+
+
+if __name__ == "__main__":
+    main()

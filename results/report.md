@@ -8,11 +8,11 @@ The complete `q1_top_merchants` Gold table answers every observed year-month and
 
 | Rank | Month | City | Merchant | Purchase Total | No of Sales |
 |---:|---|---:|---|---:|---:|
-| 1 | 2017-01 | 1 | Cesar Hall inc | $41,693,918.56 | 2,076 |
-| 2 | 2017-01 | 1 | Mary Gray 7 inc | $24,014,489.66 | 1,206 |
-| 3 | 2017-01 | 1 | Kathie Sughrue inc | $22,636,281.61 | 1,131 |
-| 4 | 2017-01 | 1 | Steven Russell inc | $19,316,187.58 | 953 |
-| 5 | 2017-01 | 1 | Maxine Flores inc | $15,509,700.97 | 756 |
+| 1 | Jan 2017 | 1 | Cesar Hall inc | $41,693,918.56 | 2,076 |
+| 2 | Jan 2017 | 1 | Mary Gray 7 inc | $24,014,489.66 | 1,206 |
+| 3 | Jan 2017 | 1 | Kathie Sughrue inc | $22,636,281.61 | 1,131 |
+| 4 | Jan 2017 | 1 | Steven Russell inc | $19,316,187.58 | 953 |
+| 5 | Jan 2017 | 1 | Maxine Flores inc | $15,509,700.97 | 756 |
 
 ## Q2 - Average amount by merchant and state
 
