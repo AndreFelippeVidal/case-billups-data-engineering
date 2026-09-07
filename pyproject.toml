@@ -12,6 +12,7 @@ dependencies = [
 
 [dependency-groups]
 dev = ["pytest==8.3.5"]
+notebook = ["ipykernel==6.29.5", "jupyterlab==4.3.6"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -29,10 +29,12 @@ PySpark is pinned to 3.5.6. The pipeline uses native DataFrame functions and loc
 The default dashboard reads the committed `data/gold` tables:
 
 ```sh
-uv run streamlit run dashboard.py
+uv run streamlit run dashboard.py --server.headless false
 ```
 
-Open the local URL printed by Streamlit.
+The command keeps running in that terminal, prints `http://localhost:8501`, and asks the operating system to open the default browser. If no tab opens, visit [http://localhost:8501](http://localhost:8501) manually. It opens Chrome automatically only when Chrome is the system default browser.
+
+For the written analysis, open [results/report.md](results/report.md). The supporting bounded rows are in [results/previews.md](results/previews.md), while the dashboard presents the same committed Gold tables interactively.
 
 ## Download the official source files
 
@@ -123,6 +125,17 @@ data/raw → billups.bronze → billups.silver → billups.gold → dashboard
 Rerun a downstream command when only that layer needs rebuilding. For example, changing business logic requires only `billups.gold` when `data/silver` is current. This provides the useful behavior of an ordered DAG without an orchestration framework or run-state subsystem.
 
 All paths can still be overridden through CLI arguments when testing in temporary directories. Run `uv run python -m billups.<stage> --help` for the available options.
+
+## Debug with the notebook
+
+Install the optional notebook tools and start JupyterLab:
+
+```sh
+uv sync --locked --dev --group notebook
+uv run --group notebook jupyter lab notebooks/data_debugging.ipynb
+```
+
+The notebook reads `data/bronze`, `data/silver`, and `data/gold` lazily with PySpark. It includes schema inspection and small query examples without embedding source rows or outputs in Git. Run the required pipeline stage first if a local layer does not exist.
 
 ## Verify
 

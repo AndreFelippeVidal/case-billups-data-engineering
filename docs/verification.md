@@ -4,7 +4,7 @@ Verified September 7, 2026 with Python 3.12, Java 17, the uv-locked environment,
 
 ## Focused behavior
 
-The complete suite passed: 14 tests in 17.26 seconds. Fixtures cover merchant fallbacks, null category, repeated attempts, invalid dates and amounts, required columns, empty input, row conservation, exact ranking ties, year boundaries, shared display names, arithmetic means, installment math, Cramer's V, circular hours and required upstream paths.
+The complete suite passed: 15 tests. Fixtures cover merchant fallbacks, null category, repeated attempts, invalid dates and amounts, required columns, empty input, row conservation, exact ranking ties, year boundaries, shared display names, arithmetic means, installment math, Cramer's V, circular hours, required upstream paths and stable committed Gold filenames.
 
 An AST inspection confirmed that every function in application code, scripts and tests has a concise docstring.
 
@@ -29,6 +29,8 @@ Measured warnings are 41 ambiguous merchant IDs, 34,570 missing merchant IDs/unm
 ## Dashboard
 
 The committed-Gold Streamlit dashboard passed its local health endpoint and `streamlit.testing.v1.AppTest` with zero exceptions. It rendered five question tabs and the official totals of 7,274,367 attempts, 6,646,193 approved attempts and 133,591,627,397.31 approved amount.
+
+The debugging notebook is valid notebook v4 JSON, contains lazy PySpark readers for all three layers, and has no stored execution counts or outputs. Its optional JupyterLab and kernel dependencies are pinned in `uv.lock`.
 
 ## Review passes
 
