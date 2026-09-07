@@ -52,8 +52,9 @@ def test_q1_exact_top_five_tie_break_year_and_shared_names(spark):
 
 def test_q2_uses_arithmetic_mean_at_merchant_state_grain(spark):
     """Q2 computes the arithmetic mean at the required grain."""
-    row = q2_merchant_state(silver_fixture(spark)).filter("merchant_id = 'm1' and state_id = 1").first()
-    assert row["attempt_count"] == 3
+    result = q2_merchant_state(silver_fixture(spark))
+    row = result.filter("merchant = 'Merchant 1' and state_id = 1").first()
+    assert result.columns == ["merchant", "state_id", "average_amount"]
     assert row["average_amount"] == Decimal("26.6666666667")
 
 
@@ -65,7 +66,9 @@ def test_q3_exact_top_three_with_hour_tie_break(spark):
     ]
     merchants = spark.createDataFrame([("m1", "Known")], ["merchant_id", "merchant_name"])
     silver = to_silver(spark.createDataFrame(rows, TX_COLUMNS), merchants).transactions
-    assert [row["hour"] for row in q3_category_hours(silver).orderBy("rank").collect()] == [1, 2, 3]
+    result = q3_category_hours(silver)
+    assert result.columns == ["category", "hour"]
+    assert [row["hour"] for row in result.collect()] == ["0100", "0200", "0300"]
 
 
 def test_installment_formula_and_unknown_exclusion(spark):

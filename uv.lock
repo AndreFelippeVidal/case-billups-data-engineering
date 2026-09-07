@@ -175,6 +175,7 @@ name = "case-billups-data-engineering"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "altair" },
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pyspark" },
@@ -192,6 +193,7 @@ notebook = [
 
 [package.metadata]
 requires-dist = [
+    { name = "altair", specifier = "==5.5.0" },
     { name = "pandas", specifier = "==2.2.3" },
     { name = "pyarrow", specifier = "==19.0.1" },
     { name = "pyspark", specifier = "==3.5.6" },

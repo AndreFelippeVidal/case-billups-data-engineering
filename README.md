@@ -10,6 +10,8 @@ A local PySpark Bronze/Silver/Gold pipeline answering the five questions in the 
 
 The official run preserved and reconciled 7,274,367 transaction attempts totaling 146,228,071,619.260000 supplied monetary units. Recommendations compare all attempts with approved exposure; the report states the limitations around authorization, timezone, currency, costs, and installments.
 
+Recorded attempts count every source transaction row, including denied authorizations. Approved attempts are the rows where `authorized_flag = Y` and are used as the closer proxy for realized sales. The source has no unique transaction ID, so neither count is a deduplicated purchase count.
+
 ## Requirements
 
 - Python 3.12
@@ -19,7 +21,8 @@ The official run preserved and reconciled 7,274,367 transaction attempts totalin
 Install the exact locked environment:
 
 ```sh
-uv sync --locked --dev
+uv python install 3.12
+uv sync --python 3.12 --locked --dev
 ```
 
 PySpark is pinned to 3.5.6. The pipeline uses native DataFrame functions and local Parquet only.
@@ -84,8 +87,10 @@ Input SHA-256 hashes are stored in `data/bronze/provenance.json`. Silver quality
 Open the dashboard after the run:
 
 ```sh
-uv run streamlit run dashboard.py
+uv run streamlit run dashboard.py --server.headless false
 ```
+
+Keep this terminal running while using the dashboard. Streamlit prints the local URL, normally [http://localhost:8501](http://localhost:8501), and asks the operating system to open the default browser. Open that URL manually if the browser does not appear. If the command exits without a URL, recreate the environment with the two installation commands in the Requirements section; this avoids a stale or broken Python interpreter in `.venv`.
 
 ## Run individual stages
 
@@ -112,7 +117,7 @@ The same pipeline can be run at explicit stage boundaries. Each command validate
 4. Open the dashboard:
 
    ```sh
-   uv run streamlit run dashboard.py
+   uv run streamlit run dashboard.py --server.headless false
    ```
 
 This is the local equivalent of an ordered three-task DAG:
@@ -131,7 +136,7 @@ All paths can still be overridden through CLI arguments when testing in temporar
 Install the optional notebook tools and start JupyterLab:
 
 ```sh
-uv sync --locked --dev --group notebook
+uv sync --python 3.12 --locked --dev --group notebook
 uv run --group notebook jupyter lab notebooks/data_debugging.ipynb
 ```
 

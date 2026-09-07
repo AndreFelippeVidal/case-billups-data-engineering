@@ -8,9 +8,9 @@ Fail on absent columns, invalid/null timestamp or non-finite/uncastable amount, 
 ## Gold acceptance criteria
 | Output | Grain / criterion |
 |---|---|
-| q1_top_merchants | Month × transaction city × merchant; sum amount, count, exact top 5 per month/city; amount descending, merchant_id ascending ties |
-| q2_merchant_state | Merchant × transaction state; arithmetic mean per attempt, count; mean descending |
-| q3_category_hours | Category × hour; sum amount and count, exact top 3 hours per category; hour ascending ties |
+| q1_top_merchants | Month × transaction city × merchant; rank, sum amount, count, exact top 5 per month/city; amount descending, merchant_id ascending ties |
+| q2_merchant_state | Merchant × transaction state; arithmetic mean per attempt, mean descending; published columns are merchant, state_id and average_amount |
+| q3_category_hours | Category × hour; exact top 3 hours per category by summed amount, hour ascending ties; published hour uses HH00 format |
 | q4_popular_merchants | City × merchant; counts and city rank; top global merchants shown across their cities |
 | q4_city_category | City × category counts, used for descriptive Cramer's V with unknown geography separately excluded from that statistic |
 | q5_cities / categories / months / hours | Aggregate purchase totals, counts, approved totals and counts; compare all attempts vs approved |

@@ -18,11 +18,11 @@ Evidence: `tests/test_silver.py` passes all listed cases. The official Silver re
 ## T3 — Exact Q1–Q3 [DONE]
 Depends on T2. Add Gold transformations and tests.
 - Q1 sums and counts per year-month/city/merchant, row_number top 5 with merchant ID tie-break. Group by ID as well as display name.
-- Q2 arithmetic mean at merchant/state grain, descending mean.
-- Q3 sum by category/hour, top 3 with ascending hour tie-break.
+- Q2 arithmetic mean at merchant/state grain, descending mean; publish only merchant, state ID and average amount.
+- Q3 sum by category/hour, top 3 with ascending hour tie-break; publish category and HH00 hour.
 - Evidence: hand-computed amounts, averages, counts, six tied merchants and four tied hours; year boundary; two merchant IDs sharing a name remain separate.
 
-Evidence: `tests/test_gold.py` passes the hand-computed sums, mean, counts, tie, year-boundary and shared-name cases. Official bounded rows are in `results/previews.md`.
+Evidence: `tests/test_gold.py` passes the hand-computed sums, mean, tie, year-boundary, shared-name, published Q2 schema and HH00 hour cases. Official bounded rows are in `results/previews.md`.
 
 ## T4 — Q4/Q5 and analytical report [DONE]
 Depends on T3. Implement remaining aggregates and billups/report.py.
@@ -42,4 +42,4 @@ Depends on T4. Add billups/pipeline.py and README.md.
 - Apply spark-review, pipeline-review and simplify; record actual commands/results in docs/verification.md.
 - Commit report and small previews under results/; exclude raw data and large generated data. Keep all text and commits in English. Push to the private GitHub remote and verify visibility.
 
-Evidence: `docs/verification.md` records focused tests, two equal synthetic runs, standalone Bronze/Silver/Gold execution, failed-run marker behavior, the full official run, dashboard validation and all three review passes. Gold is 9.5 MB and committed for the dashboard; raw, Bronze, Silver and run outputs remain ignored. README documents download, full-pipeline and staged execution, and both dashboard paths.
+Evidence: `docs/verification.md` records focused tests, two equal synthetic runs, standalone Bronze/Silver/Gold execution, full-refresh overwrite behavior, the full official run, dashboard validation and all three review passes. Gold is committed for the dashboard; raw, Bronze and Silver outputs remain ignored. README documents download, full-pipeline, staged execution, notebook debugging and the Gold-only dashboard path.

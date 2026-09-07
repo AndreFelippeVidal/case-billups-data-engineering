@@ -132,15 +132,33 @@ def q1_top_merchants(silver: DataFrame) -> DataFrame:
     rank = Window.partitionBy("year_month", "city_id").orderBy(
         F.desc("total_amount"), F.asc_nulls_last("merchant_id")
     )
-    return monthly.withColumn("rank", F.row_number().over(rank)).filter(F.col("rank") <= 5)
+    return (
+        monthly.withColumn("rank", F.row_number().over(rank))
+        .filter(F.col("rank") <= 5)
+        .select(
+            "rank",
+            "year_month",
+            "city_id",
+            "merchant_id",
+            "merchant_name",
+            "total_amount",
+            "attempt_count",
+        )
+    )
 
 
 def q2_merchant_state(silver: DataFrame) -> DataFrame:
     """Build merchant and state average purchase amounts."""
-    return silver.groupBy("merchant_id", "merchant_name", "state_id").agg(
-        F.avg("purchase_amount").alias("average_amount"),
-        F.count(F.lit(1)).alias("attempt_count"),
-    ).orderBy(F.desc("average_amount"), F.asc_nulls_last("merchant_id"), F.asc_nulls_last("state_id"))
+    return (
+        silver.groupBy("merchant_id", "merchant_name", "state_id")
+        .agg(F.avg("purchase_amount").alias("average_amount"))
+        .orderBy(
+            F.desc("average_amount"),
+            F.asc_nulls_last("merchant_id"),
+            F.asc_nulls_last("state_id"),
+        )
+        .select(F.col("merchant_name").alias("merchant"), "state_id", "average_amount")
+    )
 
 
 def q3_category_hours(silver: DataFrame) -> DataFrame:
@@ -149,7 +167,12 @@ def q3_category_hours(silver: DataFrame) -> DataFrame:
         F.sum("purchase_amount").alias("total_amount"), F.count(F.lit(1)).alias("attempt_count")
     )
     rank = Window.partitionBy("category").orderBy(F.desc("total_amount"), F.asc("hour"))
-    return hourly.withColumn("rank", F.row_number().over(rank)).filter(F.col("rank") <= 3)
+    return (
+        hourly.withColumn("rank", F.row_number().over(rank))
+        .filter(F.col("rank") <= 3)
+        .orderBy(F.asc("category"), F.asc("rank"))
+        .select("category", F.format_string("%02d00", "hour").alias("hour"))
+    )
 
 
 def q4_popular_merchants(silver: DataFrame, global_limit: int = 5) -> DataFrame:

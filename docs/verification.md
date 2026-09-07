@@ -4,7 +4,7 @@ Verified September 7, 2026 with Python 3.12, Java 17, the uv-locked environment,
 
 ## Focused behavior
 
-The complete suite passed: 15 tests. Fixtures cover merchant fallbacks, null category, repeated attempts, invalid dates and amounts, required columns, empty input, row conservation, exact ranking ties, year boundaries, shared display names, arithmetic means, installment math, Cramer's V, circular hours, required upstream paths and stable committed Gold filenames.
+The complete suite passed: 15 tests. Fixtures cover merchant fallbacks, null category, repeated attempts, invalid dates and amounts, required columns, empty input, row conservation, exact ranking ties, year boundaries, shared display names, arithmetic means, the published Q2 schema, HH00 hours, installment math, Cramer's V, circular hours, required upstream paths and stable committed Gold filenames.
 
 An AST inspection confirmed that every function in application code, scripts and tests has a concise docstring.
 
@@ -28,7 +28,7 @@ Measured warnings are 41 ambiguous merchant IDs, 34,570 missing merchant IDs/unm
 
 ## Dashboard
 
-The committed-Gold Streamlit dashboard passed its local health endpoint and `streamlit.testing.v1.AppTest` with zero exceptions. It rendered five question tabs and the official totals of 7,274,367 attempts, 6,646,193 approved attempts and 133,591,627,397.31 approved amount.
+The committed-Gold Streamlit dashboard passed `streamlit.testing.v1.AppTest` with zero exceptions and a visual Chrome review of all five tabs. It renders the official totals of 7,274,367 recorded attempts, 6,646,193 approved attempts and $133,591,627,397.31 approved amount. The tables use readable headers and visual currency/percentage formatting without changing numeric Gold types. Q1 shows Rank plus the five requested report columns; Q2 publishes only Merchant, State ID and Average Amount; Q3 publishes Category and HH00 Hour; Q4 displays Cramer's V and its interpretation; Q5 directly answers items a-e and states its assumptions before the analysis. The city and category charts preserve descending approved-amount order through explicit categorical axis ordering.
 
 The debugging notebook is valid notebook v4 JSON, contains lazy PySpark readers for all three layers, and has no stored execution counts or outputs. Its optional JupyterLab and kernel dependencies are pinned in `uv.lock`.
 
