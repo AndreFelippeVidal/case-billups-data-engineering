@@ -110,7 +110,12 @@ def installment_profitability_chart(frame: pd.DataFrame) -> None:
         lambda value: "Positive" if value >= 0 else "Negative"
     )
     base = alt.Chart(chart_data).encode(
-        x=alt.X("plan_installments:Q", title="Number of payments", axis=alt.Axis(tickMinStep=1)),
+        x=alt.X(
+            "plan_installments:Q",
+            title="Number of payments",
+            axis=alt.Axis(values=list(range(1, 13)), format="d"),
+            scale=alt.Scale(domain=[1, 12]),
+        ),
         y=alt.Y("expected_profit_rate:Q", title="Expected profit per approved unit", axis=alt.Axis(format=".0%")),
     )
     line = base.mark_line(color="#9c9c9c")
