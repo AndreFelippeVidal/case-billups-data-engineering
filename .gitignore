@@ -2,12 +2,17 @@
 __pycache__/
 .pytest_cache/
 *.pyc
-data/
+data/*
+!data/gold/
+!data/gold/**
+data/gold/**/*.crc
+data/gold/*/_SUCCESS
 runs/
 .DS_Store
 *.egg-info/
 
-# Local planning and agent instructions
-/docs/
+# Local agent instructions
 /AGENTS.md
 /.agents/
+
+BIL-006 · Sr Data Engineer – Python Spark (7).pdf

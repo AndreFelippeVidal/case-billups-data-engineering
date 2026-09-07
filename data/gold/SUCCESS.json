@@ -1,0 +1,21 @@
+{
+  "completed_at_utc": "2026-09-07T16:31:07.759801+00:00",
+  "gold_tables": [
+    "q1_top_merchants",
+    "q2_merchant_state",
+    "q3_category_hours",
+    "q4_city_category",
+    "q4_popular_merchants",
+    "q5_categories",
+    "q5_cities",
+    "q5_hours",
+    "q5_installments",
+    "q5_months"
+  ],
+  "reconciliation": {
+    "amount": "146228071619.260000",
+    "count": 7274367,
+    "passed": true
+  },
+  "source_run": "runs/official"
+}
