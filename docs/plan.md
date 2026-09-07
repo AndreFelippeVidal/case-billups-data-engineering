@@ -6,4 +6,4 @@ Day 2 (up to 8 hours): answer Q4/Q5 with limitations (2h); verify rerun and fail
 
 Files: billups/transforms.py owns Silver and Gold logic; billups/pipeline.py owns local reads, persistence and quality evidence; billups/report.py renders bounded aggregate findings; scripts/download_data.py fetches the official inputs; tests/ verifies semantics and reruns. Dependencies are PySpark for required processing and pytest for test execution. Use the standard library for downloads, manifests and reports.
 
-Sequence: preserve raw → Bronze → validate/normalize Silver → Gold for Q1–Q5 → reconcile → report and SUCCESS marker. Review joins, windows, nulls and installment formulas before full execution. Reuse persisted Silver for repeated Gold queries. No additional platform or generic abstractions.
+Sequence: preserve raw → overwrite Bronze → validate/normalize and overwrite Silver → overwrite Gold for Q1–Q5 → reconcile → overwrite report. Review joins, windows, nulls and installment formulas before full execution. Reuse persisted Silver for repeated Gold queries. No additional platform, run-state subsystem or generic orchestration abstraction.

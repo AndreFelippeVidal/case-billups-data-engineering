@@ -16,6 +16,7 @@ if not GOLD.is_absolute():
 
 @st.cache_data
 def load_table(name: str) -> pd.DataFrame:
+    """Load one Gold Parquet table for presentation."""
     path = GOLD / name
     if not path.exists():
         raise FileNotFoundError(f"Missing Gold table: {path}")

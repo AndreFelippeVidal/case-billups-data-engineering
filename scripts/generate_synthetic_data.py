@@ -10,6 +10,7 @@ from pyspark.sql import SparkSession
 
 
 def generate(destination: Path, omit_merchant_name: bool = False) -> None:
+    """Write a deterministic source pair for pipeline verification."""
     if destination.exists():
         raise FileExistsError(f"Destination already exists: {destination}")
     destination.mkdir(parents=True)

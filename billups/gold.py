@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import shutil
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -12,12 +10,23 @@ from pyspark import StorageLevel
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
-from billups.common import build_spark, json_value, require_completed_stage, write_json
-from billups.report import render_report
+from billups.common import build_spark, require_paths, write_json
+from billups.report import render_previews, render_report
 from billups.transforms import gold_frames
 
 
+def normalize_parquet_filename(directory: Path) -> None:
+    """Rename a single Spark part file to a stable Gold filename."""
+    parts = list(directory.glob("part-*.parquet"))
+    if len(parts) != 1:
+        raise ValueError(f"Expected one Parquet part in {directory}, found {len(parts)}")
+    parts[0].replace(directory / "data.parquet")
+    for checksum in directory.glob(".part-*.crc"):
+        checksum.unlink()
+
+
 def reconcile(silver: DataFrame, cities: DataFrame) -> dict[str, Any]:
+    """Reconcile whole-population Silver and Gold counts and amounts."""
     source = silver.agg(
         F.count(F.lit(1)).alias("count"), F.sum("purchase_amount").alias("amount")
     ).first()
@@ -35,54 +44,30 @@ def reconcile(silver: DataFrame, cities: DataFrame) -> dict[str, Any]:
     }
 
 
-def write_preview(frame: DataFrame, destination: Path, rows: int = 20) -> None:
-    records = [
-        {key: json_value(value) for key, value in row.asDict(recursive=True).items()}
-        for row in frame.limit(rows).collect()
-    ]
-    write_json(destination, records)
-
-
 def run(
     silver_dir: Path,
     output_dir: Path,
-    publish_gold: Path | None = None,
+    results_dir: Path,
     spark: SparkSession | None = None,
 ) -> None:
-    require_completed_stage(silver_dir, "Silver")
-    if output_dir.exists():
-        raise FileExistsError(f"Gold output directory already exists: {output_dir}")
-    if publish_gold and publish_gold.exists():
-        raise FileExistsError(f"Published Gold directory already exists: {publish_gold}")
+    """Overwrite Gold business tables, reconciliation, and reports."""
+    require_paths([silver_dir / "transactions"], "Gold")
     owns_spark = spark is None
     spark = spark or build_spark("billups-gold")
-    output_dir.mkdir(parents=True)
-    previews_dir = output_dir / "previews"
-    previews_dir.mkdir()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    results_dir.mkdir(parents=True, exist_ok=True)
     cached = spark.read.parquet(str(silver_dir / "transactions")).persist(StorageLevel.DISK_ONLY)
     try:
         frames = gold_frames(cached)
         for name, frame in frames.items():
-            frame.coalesce(1).write.mode("errorifexists").parquet(str(output_dir / name))
+            table_dir = output_dir / name
+            frame.coalesce(1).write.mode("overwrite").parquet(str(table_dir))
+            normalize_parquet_filename(table_dir)
         persisted = {name: spark.read.parquet(str(output_dir / name)) for name in frames}
         reconciliation = reconcile(cached, persisted["q5_cities"])
-        write_json(output_dir / "dq.json", {"reconciliation": reconciliation})
-        report_metadata = render_report(persisted, output_dir / "report.md")
-        for name, frame in persisted.items():
-            columns = frame.columns[: min(3, len(frame.columns))]
-            write_preview(frame.orderBy(*columns), previews_dir / f"{name}.json")
-        success = {
-            "completed_at_utc": datetime.now(timezone.utc).isoformat(),
-            "dq": "dq.json",
-            "gold_tables": sorted(frames),
-            "report": "report.md",
-            "report_metadata": report_metadata,
-            "stage": "gold",
-        }
-        write_json(output_dir / "SUCCESS.json", success)
-        if publish_gold:
-            publish_gold.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(output_dir, publish_gold)
+        write_json(output_dir / "reconciliation.json", reconciliation)
+        render_report(persisted, results_dir / "report.md")
+        render_previews(persisted, reconciliation, results_dir / "previews.md")
     finally:
         cached.unpersist()
         if owns_spark:
@@ -90,12 +75,13 @@ def run(
 
 
 def main() -> None:
+    """Run the Silver-to-Gold command-line stage."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--silver-dir", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--publish-gold", type=Path)
+    parser.add_argument("--silver-dir", type=Path, default=Path("data/silver"))
+    parser.add_argument("--output-dir", type=Path, default=Path("data/gold"))
+    parser.add_argument("--results-dir", type=Path, default=Path("results"))
     args = parser.parse_args()
-    run(args.silver_dir, args.output_dir, args.publish_gold)
+    run(args.silver_dir, args.output_dir, args.results_dir)
 
 
 if __name__ == "__main__":

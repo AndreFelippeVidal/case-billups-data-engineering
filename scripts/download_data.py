@@ -15,6 +15,7 @@ FILES = {
 
 
 def download(destination: Path) -> None:
+    """Download missing official sources through temporary files."""
     destination.mkdir(parents=True, exist_ok=True)
     for filename, url in FILES.items():
         target = destination / filename

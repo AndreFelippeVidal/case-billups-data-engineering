@@ -6,6 +6,7 @@ from pyspark.sql import SparkSession
 
 @pytest.fixture(scope="session")
 def spark() -> SparkSession:
+    """Provide one local Spark session for transformation tests."""
     session = (
         SparkSession.builder.master("local[2]")
         .appName("billups-tests")

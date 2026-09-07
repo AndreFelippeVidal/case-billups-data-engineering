@@ -6,8 +6,6 @@ data/*
 !data/gold/
 !data/gold/**
 data/gold/**/*.crc
-data/gold/*/_SUCCESS
-runs/
 .DS_Store
 *.egg-info/
 

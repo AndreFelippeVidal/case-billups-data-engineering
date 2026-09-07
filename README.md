@@ -58,68 +58,59 @@ If downloading manually, use the links below and rename/place the files exactly 
 
 ## Run end to end
 
-Choose a new output directory for every run. The pipeline refuses an existing path and never deletes or overwrites a prior run:
+Run the complete full-refresh pipeline with one command:
 
 ```sh
-uv run python -m billups.pipeline \
-  --raw-dir data/raw \
-  --output-dir runs/local-001
+uv run python -m billups.pipeline
 ```
 
-The command writes:
+Every trigger replaces the generated layers and reports with outputs from the current raw inputs:
 
 ```text
-runs/local-001/
-├── bronze/
-├── silver/
-├── gold/
-├── previews/
-├── provenance.json
-├── dq.json
+data/
+├── raw/       # untouched source files
+├── bronze/    # overwritten source-shaped Parquet and provenance
+├── silver/    # overwritten validated/enriched Parquet and DQ
+└── gold/      # overwritten business tables and reconciliation
+results/
 ├── report.md
-└── SUCCESS.json
+└── previews.md
 ```
 
-`SUCCESS.json` is written last. A failed run may contain diagnostic partial outputs but is not consumable. Input SHA-256 hashes are stored in `provenance.json`; row and amount reconciliation plus quality counts are stored in `dq.json`.
+Input SHA-256 hashes are stored in `data/bronze/provenance.json`. Silver quality counts are stored in `data/silver/dq.json`, and whole-population reconciliation is stored in `data/gold/reconciliation.json`.
 
-Open the dashboard against the fresh run:
+Open the dashboard after the run:
 
 ```sh
-BILLUPS_GOLD_DIR=runs/local-001/gold uv run streamlit run dashboard.py
+uv run streamlit run dashboard.py
 ```
 
 ## Run individual stages
 
-The same pipeline can be resumed at explicit stage boundaries. Each command requires the preceding stage's `SUCCESS.json`, writes to a new directory, and publishes its own `SUCCESS.json` only after the stage is complete.
+The same pipeline can be run at explicit stage boundaries. Each command validates that its required upstream datasets exist and overwrites only its own output layer.
 
 1. Raw to Bronze, including source SHA-256 provenance:
 
    ```sh
-   uv run python -m billups.bronze \
-     --raw-dir data/raw \
-     --output-dir runs/staged-001/bronze
+   uv run python -m billups.bronze
    ```
 
 2. Bronze to Silver, including validation, cleanup, merchant enrichment, ambiguity evidence, and DQ metrics:
 
    ```sh
-   uv run python -m billups.silver \
-     --bronze-dir runs/staged-001/bronze \
-     --output-dir runs/staged-001/silver
+   uv run python -m billups.silver
    ```
 
 3. Silver to Gold, including all five business questions, reconciliation, report, and bounded previews:
 
    ```sh
-   uv run python -m billups.gold \
-     --silver-dir runs/staged-001/silver \
-     --output-dir runs/staged-001/gold
+   uv run python -m billups.gold
    ```
 
-4. Open the dashboard from that Gold stage:
+4. Open the dashboard:
 
    ```sh
-   BILLUPS_GOLD_DIR=runs/staged-001/gold uv run streamlit run dashboard.py
+   uv run streamlit run dashboard.py
    ```
 
 This is the local equivalent of an ordered three-task DAG:
@@ -129,7 +120,9 @@ data/raw → billups.bronze → billups.silver → billups.gold → dashboard
                  └──────── billups.pipeline runs all three ────────┘
 ```
 
-Rerun only a downstream stage by selecting a new output directory for it. Existing completed stages remain immutable, which makes lineage explicit and prevents accidental mixed or overwritten outputs.
+Rerun a downstream command when only that layer needs rebuilding. For example, changing business logic requires only `billups.gold` when `data/silver` is current. This provides the useful behavior of an ordered DAG without an orchestration framework or run-state subsystem.
+
+All paths can still be overridden through CLI arguments when testing in temporary directories. Run `uv run python -m billups.<stage> --help` for the available options.
 
 ## Verify
 
@@ -139,13 +132,18 @@ Run the hand-computable Silver, Gold, report, and edge-case checks:
 uv run pytest -q
 ```
 
-The pipeline also ships a deterministic synthetic source generator used for end-to-end rerun and failure-marker verification:
+The pipeline also ships a deterministic synthetic source generator used for end-to-end overwrite verification:
 
 ```sh
 uv run python scripts/generate_synthetic_data.py /tmp/billups-synthetic-source
-uv run python -m billups.pipeline --raw-dir /tmp/billups-synthetic-source --output-dir /tmp/billups-run-1
+uv run python -m billups.pipeline \
+  --raw-dir /tmp/billups-synthetic-source \
+  --bronze-dir /tmp/billups-bronze \
+  --silver-dir /tmp/billups-silver \
+  --gold-dir /tmp/billups-gold \
+  --results-dir /tmp/billups-results
 ```
 
 ## Data handling
 
-`data/raw`, `data/bronze`, `data/silver`, and `runs` are ignored by Git. Their directories can exist locally without committing source or runtime data. Only the final Gold data under `data/gold` is committed. The dashboard has no dependency on raw, Bronze, or Silver files.
+`data/raw`, `data/bronze`, and `data/silver` are ignored by Git. Their directories can exist locally without committing source or intermediate data. Only the final Gold data under `data/gold` is committed. The dashboard has no dependency on raw, Bronze, or Silver files.

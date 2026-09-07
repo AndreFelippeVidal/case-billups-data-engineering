@@ -1,63 +1,57 @@
 # Bounded Gold previews
 
-These rows are deterministic, bounded examples from the official Gold outputs. The complete tables are under `data/gold` and available in the Streamlit dashboard.
+These deterministic samples come from the generated Gold Parquet outputs.
 
-## Q1 - Top merchants for city 1 in January 2017
+## Q1 - Monthly top merchants by city
 
-| Rank | Merchant ID | Merchant | Purchase total | Attempts |
-|---:|---|---|---:|---:|
-| 1 | M_ID_9139332ccc | Cesar Hall inc | 41,693,918.56 | 2,076 |
-| 2 | M_ID_fc7d7969c3 | Mary Gray 7 inc | 24,014,489.66 | 1,206 |
-| 3 | M_ID_e5374dabc0 | Kathie Sughrue inc | 22,636,281.61 | 1,131 |
-| 4 | M_ID_86be58d7e0 | Steven Russell inc | 19,316,187.58 | 953 |
-| 5 | M_ID_57df19bf28 | Maxine Flores inc | 15,509,700.97 | 756 |
+| Year Month | City Id | Merchant Id | Merchant Name | Total Amount | Attempt Count | Rank |
+|---|---|---|---|---|---|---|
+| 2017-01 | 1 | M_ID_9139332ccc | Cesar Hall inc | 41693918.56 | 2076 | 1 |
+| 2017-01 | 1 | M_ID_fc7d7969c3 | Mary Gray 7 inc | 24014489.66 | 1206 | 2 |
+| 2017-01 | 1 | M_ID_e5374dabc0 | Kathie Sughrue inc | 22636281.61 | 1131 | 3 |
+| 2017-01 | 1 | M_ID_86be58d7e0 | Steven Russell inc | 19316187.58 | 953 | 4 |
+| 2017-01 | 1 | M_ID_57df19bf28 | Maxine Flores inc | 15509700.97 | 756 | 5 |
 
-## Q2 - Largest merchant/state arithmetic means
+## Q2 - Largest merchant/state averages
 
-Each leading row has one attempt, so these values should not be interpreted as stable merchant performance.
+| Merchant Id | Merchant Name | State Id | Average Amount | Attempt Count |
+|---|---|---|---|---|
+| M_ID_816942a7a5 | Martha Tyrrell inc | 7 | 39937.61 | 1 |
+| M_ID_2528f59982 | Julie Mckelvey inc | 9 | 39727.59 | 1 |
+| M_ID_80672f91d5 | Jennifer Pool inc | 24 | 39658.71 | 1 |
+| M_ID_c53f25cd23 | Ileana Owens inc | 9 | 39649.56 | 1 |
+| M_ID_e510c1c618 | Robert Mullins inc | 15 | 39642.69 | 1 |
 
-| Merchant | State | Average amount | Attempts |
-|---|---:|---:|---:|
-| Martha Tyrrell inc | 7 | 39,937.61 | 1 |
-| Julie Mckelvey inc | 9 | 39,727.59 | 1 |
-| Jennifer Pool inc | 24 | 39,658.71 | 1 |
-| Ileana Owens inc | 9 | 39,649.56 | 1 |
-| Robert Mullins inc | 15 | 39,642.69 | 1 |
+## Q3 - Leading category hours
 
-## Q3 - Top hours for categories A and B
+| Category | Hour | Total Amount | Attempt Count | Rank |
+|---|---|---|---|---|
+| A | 12 | 5731975337.46 | 285046 | 1 |
+| A | 13 | 5648608300.81 | 281070 | 2 |
+| A | 17 | 5473251727.35 | 272176 | 3 |
+| B | 13 | 4303909949.93 | 214372 | 1 |
+| B | 12 | 4154695164.46 | 206848 | 2 |
+| B | 14 | 4088684407.39 | 203286 | 3 |
+| C | 17 | 811964558.29 | 40359 | 1 |
+| C | 16 | 806582348.55 | 40093 | 2 |
+| C | 15 | 787244694.65 | 39183 | 3 |
+| Unknown category | 0 | 229942343.47 | 11434 | 1 |
+| Unknown category | 14 | 65060353.20 | 3226 | 2 |
+| Unknown category | 13 | 64525934.04 | 3140 | 3 |
 
-| Category | Rank | Hour | Purchase total | Attempts |
-|---|---:|---:|---:|---:|
-| A | 1 | 12 | 5,731,975,337.46 | 285,046 |
-| A | 2 | 13 | 5,648,608,300.81 | 281,070 |
-| A | 3 | 17 | 5,473,251,727.35 | 272,176 |
-| B | 1 | 13 | 4,303,909,949.93 | 214,372 |
-| B | 2 | 12 | 4,154,695,164.46 | 206,848 |
-| B | 3 | 14 | 4,088,684,407.39 | 203,286 |
+## Q4 - Popular merchants across cities
 
-## Q4 - Most popular merchants and observed cities
+| City Id | Merchant Id | Merchant Name | City Attempt Count | City Rank | Global Attempt Count | Global Rank |
+|---|---|---|---|---|---|---|
+| 69 | M_ID_00a6ca8a8a | M_ID_00a6ca8a8a | 264587 | 1 | 279377 | 1 |
+| 1 | M_ID_00a6ca8a8a | M_ID_00a6ca8a8a | 14790 | 9 | 279377 | 1 |
+| 1 | M_ID_e5374dabc0 | Kathie Sughrue inc | 106941 | 1 | 106946 | 2 |
+| 69 | M_ID_e5374dabc0 | Kathie Sughrue inc | 5 | 12403 | 106946 | 2 |
+| 1 | M_ID_9139332ccc | Cesar Hall inc | 82128 | 2 | 90106 | 3 |
+| 291 | M_ID_9139332ccc | Cesar Hall inc | 7978 | 1 | 90106 | 3 |
+| 69 | M_ID_50f575c681 | Todd Turner 3 inc | 45912 | 2 | 45912 | 4 |
+| 1 | M_ID_fc7d7969c3 | Mary Gray 7 inc | 44075 | 3 | 44075 | 5 |
 
-| Global rank | Merchant | City | City attempts | City rank | Global attempts |
-|---:|---|---:|---:|---:|---:|
-| 1 | M_ID_00a6ca8a8a | 69 | 264,587 | 1 | 279,377 |
-| 1 | M_ID_00a6ca8a8a | 1 | 14,790 | 9 | 279,377 |
-| 2 | Kathie Sughrue inc | 1 | 106,941 | 1 | 106,946 |
-| 2 | Kathie Sughrue inc | 69 | 5 | 12,403 | 106,946 |
-| 3 | Cesar Hall inc | 1 | 82,128 | 2 | 90,106 |
-| 3 | Cesar Hall inc | 291 | 7,978 | 1 | 90,106 |
+## Reconciliation
 
-The full contingency table gives Cramer's V = 0.1810 for known cities and all retained categories.
-
-## Official-run quality evidence
-
-| Check | Result |
-|---|---:|
-| Silver rows | 7,274,367 |
-| Reconciled Gold rows | 7,274,367 |
-| Silver amount | 146,228,071,619.260000 |
-| Reconciled Gold amount | 146,228,071,619.260000 |
-| Ambiguous merchant IDs | 41 |
-| Missing merchant IDs / unmatched lookups | 34,570 |
-| Unknown categories retained | 44,625 |
-| Denied attempts retained | 628,174 |
-| Unknown installment values retained | 50 |
+Silver and Gold reconcile at 7,274,367 rows and 146228071619.260000 total amount.

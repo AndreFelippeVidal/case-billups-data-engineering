@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
 
 
 def cramers_v(rows: list[dict[str, Any]]) -> float:
@@ -61,15 +62,18 @@ def smallest_circular_interval(hour_amounts: dict[int, Decimal], target_share: f
 
 
 def _records(frame: DataFrame, limit: int | None = None) -> list[dict[str, Any]]:
+    """Collect a Gold aggregate as dictionaries with an optional row limit."""
     selected = frame.limit(limit) if limit else frame
     return [row.asDict(recursive=True) for row in selected.collect()]
 
 
 def _money(value: Any) -> str:
+    """Format a monetary value with two decimal places."""
     return f"{Decimal(value):,.2f}"
 
 
 def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, Any]:
+    """Render the analytical findings and assumptions as Markdown."""
     cities = _records(gold["q5_cities"].orderBy("approved_amount", ascending=False), 5)
     categories = _records(gold["q5_categories"].orderBy("approved_amount", ascending=False), 5)
     months = _records(gold["q5_months"].orderBy("approved_amount_per_observed_day", ascending=False), 5)
@@ -172,3 +176,67 @@ def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, An
     ])
     destination.write_text("\n".join(lines), encoding="utf-8")
     return {"cramers_v": association, "opening_interval": interval}
+
+
+def _markdown_table(rows: list[dict[str, Any]], columns: list[str]) -> list[str]:
+    """Render bounded result rows as a simple Markdown table."""
+    labels = [column.replace("_", " ").title() for column in columns]
+    lines = ["| " + " | ".join(labels) + " |", "|" + "|".join(["---"] * len(columns)) + "|"]
+    for row in rows:
+        values = []
+        for column in columns:
+            value = row[column]
+            values.append(f"{value:.2f}" if isinstance(value, Decimal) else str(value))
+        lines.append("| " + " | ".join(values) + " |")
+    return lines
+
+
+def render_previews(
+    gold: dict[str, DataFrame], reconciliation: dict[str, Any], destination: Path
+) -> None:
+    """Render bounded, reproducible previews of the main Gold answers."""
+    selections = [
+        (
+            "Q1 - Monthly top merchants by city",
+            gold["q1_top_merchants"].orderBy("year_month", "city_id", "rank"),
+            ["year_month", "city_id", "merchant_id", "merchant_name", "total_amount", "attempt_count", "rank"],
+            5,
+        ),
+        (
+            "Q2 - Largest merchant/state averages",
+            gold["q2_merchant_state"].orderBy("average_amount", ascending=False),
+            ["merchant_id", "merchant_name", "state_id", "average_amount", "attempt_count"],
+            5,
+        ),
+        (
+            "Q3 - Leading category hours",
+            gold["q3_category_hours"].orderBy("category", "rank"),
+            ["category", "hour", "total_amount", "attempt_count", "rank"],
+            12,
+        ),
+        (
+            "Q4 - Popular merchants across cities",
+            gold["q4_popular_merchants"].orderBy("global_rank", F.desc("city_attempt_count")),
+            ["city_id", "merchant_id", "merchant_name", "city_attempt_count", "city_rank", "global_attempt_count", "global_rank"],
+            10,
+        ),
+    ]
+    lines = [
+        "# Bounded Gold previews",
+        "",
+        "These deterministic samples come from the generated Gold Parquet outputs.",
+        "",
+    ]
+    for title, frame, columns, limit in selections:
+        lines.extend([f"## {title}", ""])
+        lines.extend(_markdown_table(_records(frame.select(*columns), limit), columns))
+        lines.append("")
+    lines.extend(
+        [
+            "## Reconciliation",
+            "",
+            f"Silver and Gold reconcile at {reconciliation['gold_count']:,} rows and {reconciliation['gold_amount']} total amount.",
+            "",
+        ]
+    )
+    destination.write_text("\n".join(lines), encoding="utf-8")

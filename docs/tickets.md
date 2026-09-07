@@ -36,9 +36,9 @@ Evidence: `tests/test_report.py` and `tests/test_gold.py` pass these cases. The 
 
 ## T5 — Run, verify, document and publish [DONE]
 Depends on T4. Add billups/pipeline.py and README.md.
-- One documented uv run command writes fresh run-directory Bronze/Silver/Gold, SHA-256 provenance, DQ JSON, report, bounded previews, then SUCCESS.json. Refuse an existing output directory. No destructive overwrite.
+- One documented uv run command overwrites Bronze/Silver/Gold, SHA-256 provenance, DQ JSON, report and bounded previews. Separate commands rebuild only Bronze, Silver or Gold.
 - Validate nonempty input, date/amount casts, lookup uniqueness, row conservation and whole-population Gold count/amount reconciliation.
-- Run synthetic end-to-end twice and compare business outputs; test failure produces no completion marker. Run the full official dataset.
+- Run synthetic end-to-end twice and compare business outputs; confirm the second trigger overwrites the first. Run the full official dataset.
 - Apply spark-review, pipeline-review and simplify; record actual commands/results in docs/verification.md.
 - Commit report and small previews under results/; exclude raw data and large generated data. Keep all text and commits in English. Push to the private GitHub remote and verify visibility.
 

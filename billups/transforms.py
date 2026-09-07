@@ -31,6 +31,7 @@ class SilverResult:
 
 
 def require_columns(frame: DataFrame, required: set[str], source: str) -> None:
+    """Raise an error when a source omits required columns."""
     missing = sorted(required.difference(frame.columns))
     if missing:
         raise ValueError(f"{source} is missing required columns: {', '.join(missing)}")
@@ -114,12 +115,14 @@ def to_silver(transactions: DataFrame, merchants: DataFrame) -> SilverResult:
 
 
 def _approved_amount() -> F.Column:
+    """Return approved amount and zero for other attempts."""
     return F.when(F.col("authorized_flag") == "Y", F.col("purchase_amount")).otherwise(
         F.lit(0).cast(MONEY)
     )
 
 
 def q1_top_merchants(silver: DataFrame) -> DataFrame:
+    """Build the monthly top-five merchants for each city."""
     monthly = silver.groupBy(
         F.date_format("purchase_date", "yyyy-MM").alias("year_month"),
         "city_id",
@@ -133,6 +136,7 @@ def q1_top_merchants(silver: DataFrame) -> DataFrame:
 
 
 def q2_merchant_state(silver: DataFrame) -> DataFrame:
+    """Build merchant and state average purchase amounts."""
     return silver.groupBy("merchant_id", "merchant_name", "state_id").agg(
         F.avg("purchase_amount").alias("average_amount"),
         F.count(F.lit(1)).alias("attempt_count"),
@@ -140,6 +144,7 @@ def q2_merchant_state(silver: DataFrame) -> DataFrame:
 
 
 def q3_category_hours(silver: DataFrame) -> DataFrame:
+    """Build the top three purchase hours for each category."""
     hourly = silver.groupBy("category", F.hour("purchase_date").alias("hour")).agg(
         F.sum("purchase_amount").alias("total_amount"), F.count(F.lit(1)).alias("attempt_count")
     )
@@ -148,6 +153,7 @@ def q3_category_hours(silver: DataFrame) -> DataFrame:
 
 
 def q4_popular_merchants(silver: DataFrame, global_limit: int = 5) -> DataFrame:
+    """Show globally popular merchants across observed cities."""
     merchant_totals = silver.groupBy("merchant_id", "merchant_name").agg(
         F.count(F.lit(1)).alias("global_attempt_count")
     )
@@ -177,10 +183,12 @@ def q4_popular_merchants(silver: DataFrame, global_limit: int = 5) -> DataFrame:
 
 
 def q4_city_category(silver: DataFrame) -> DataFrame:
+    """Build the city and category transaction contingency table."""
     return silver.groupBy("city_id", "category").agg(F.count(F.lit(1)).alias("attempt_count"))
 
 
 def _q5_dimension(silver: DataFrame, *dimensions: F.Column | str) -> DataFrame:
+    """Aggregate all-attempt and approved measures by dimensions."""
     return silver.groupBy(*dimensions).agg(
         F.sum("purchase_amount").alias("all_attempt_amount"),
         F.count(F.lit(1)).alias("all_attempt_count"),
@@ -190,14 +198,17 @@ def _q5_dimension(silver: DataFrame, *dimensions: F.Column | str) -> DataFrame:
 
 
 def q5_cities(silver: DataFrame) -> DataFrame:
+    """Build city-level recommendation measures."""
     return _q5_dimension(silver, "city_id")
 
 
 def q5_categories(silver: DataFrame) -> DataFrame:
+    """Build category-level recommendation measures."""
     return _q5_dimension(silver, "category")
 
 
 def q5_months(silver: DataFrame) -> DataFrame:
+    """Build monthly measures with observed-date exposure."""
     return _q5_dimension(
         silver,
         F.date_format("purchase_date", "yyyy-MM").alias("year_month"),
@@ -214,10 +225,12 @@ def q5_months(silver: DataFrame) -> DataFrame:
 
 
 def q5_hours(silver: DataFrame) -> DataFrame:
+    """Build hourly recommendation measures."""
     return _q5_dimension(silver, F.hour("purchase_date").alias("hour"))
 
 
 def q5_installments(silver: DataFrame) -> DataFrame:
+    """Build installment exposure and profit sensitivity measures."""
     modeled = (
         silver.withColumn(
             "plan_installments",
@@ -255,6 +268,7 @@ def q5_installments(silver: DataFrame) -> DataFrame:
 
 
 def gold_frames(silver: DataFrame) -> dict[str, DataFrame]:
+    """Return every named Gold business output."""
     return {
         "q1_top_merchants": q1_top_merchants(silver),
         "q2_merchant_state": q2_merchant_state(silver),

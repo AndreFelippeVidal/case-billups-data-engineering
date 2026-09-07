@@ -12,12 +12,14 @@ from pyspark.sql import SparkSession
 
 
 def build_spark(app_name: str) -> SparkSession:
+    """Create the local Spark session used by pipeline stages."""
     spark = (
-        SparkSession.builder.master("local[*]")
+        SparkSession.builder.master("local[2]")
         .appName(app_name)
         .config("spark.ui.enabled", "false")
         .config("spark.sql.session.timeZone", "UTC")
         .config("spark.sql.shuffle.partitions", "16")
+        .config("spark.hadoop.mapreduce.fileoutputcommitter.marksuccessfuljobs", "false")
         .getOrCreate()
     )
     spark.sparkContext.setLogLevel("WARN")
@@ -25,6 +27,7 @@ def build_spark(app_name: str) -> SparkSession:
 
 
 def sha256(path: Path) -> str:
+    """Calculate a deterministic SHA-256 for a file or dataset directory."""
     digest = hashlib.sha256()
     files = [path] if path.is_file() else sorted(item for item in path.rglob("*") if item.is_file())
     for file in files:
@@ -37,12 +40,14 @@ def sha256(path: Path) -> str:
 
 
 def source_bytes(path: Path) -> int:
+    """Return the total byte size of a file or dataset directory."""
     if path.is_file():
         return path.stat().st_size
     return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
 
 
 def json_value(value: Any) -> Any:
+    """Convert supported analytical values to JSON-safe values."""
     if isinstance(value, Decimal):
         return str(value)
     if hasattr(value, "isoformat"):
@@ -51,9 +56,12 @@ def json_value(value: Any) -> Any:
 
 
 def write_json(path: Path, value: Any) -> None:
+    """Write formatted deterministic JSON to a local path."""
     path.write_text(json.dumps(value, indent=2, sort_keys=True, default=json_value) + "\n", encoding="utf-8")
 
 
-def require_completed_stage(path: Path, stage: str) -> None:
-    if not (path / "SUCCESS.json").is_file():
-        raise ValueError(f"{stage} stage is incomplete or missing SUCCESS.json: {path}")
+def require_paths(paths: list[Path], stage: str) -> None:
+    """Require the input paths needed by a pipeline stage."""
+    missing = [str(path) for path in paths if not path.exists()]
+    if missing:
+        raise FileNotFoundError(f"{stage} inputs are missing: {', '.join(missing)}")

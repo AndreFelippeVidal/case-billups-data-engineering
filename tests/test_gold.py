@@ -18,6 +18,7 @@ TX_COLUMNS = [
 
 
 def silver_fixture(spark):
+    """Build a hand-computable Silver fixture for Gold tests."""
     rows = []
     for merchant in ["m6", "m5", "m4", "m3", "m2", "m1"]:
         rows.append((merchant, "2017-01-01 01:00:00", "10", 1, 1, "A", 1, "Y"))
@@ -37,6 +38,7 @@ def silver_fixture(spark):
 
 
 def test_q1_exact_top_five_tie_break_year_and_shared_names(spark):
+    """Q1 handles ties, years, counts, and shared display names."""
     result = q1_top_merchants(silver_fixture(spark))
     january_2017 = result.filter("year_month = '2017-01' and city_id = 1").orderBy("rank").collect()
     assert len(january_2017) == 5
@@ -49,12 +51,14 @@ def test_q1_exact_top_five_tie_break_year_and_shared_names(spark):
 
 
 def test_q2_uses_arithmetic_mean_at_merchant_state_grain(spark):
+    """Q2 computes the arithmetic mean at the required grain."""
     row = q2_merchant_state(silver_fixture(spark)).filter("merchant_id = 'm1' and state_id = 1").first()
     assert row["attempt_count"] == 3
     assert row["average_amount"] == Decimal("26.6666666667")
 
 
 def test_q3_exact_top_three_with_hour_tie_break(spark):
+    """Q3 uses ascending hour to resolve equal totals."""
     rows = [
         ("m1", f"2017-01-01 0{hour}:00:00", "10", 1, 1, "C", 1, "Y")
         for hour in [4, 3, 2, 1]
@@ -65,6 +69,7 @@ def test_q3_exact_top_three_with_hour_tie_break(spark):
 
 
 def test_installment_formula_and_unknown_exclusion(spark):
+    """Installment scenarios follow the formula and exclude unknowns."""
     result = q5_installments(silver_fixture(spark))
     two = result.filter("plan_installments = 2").first()
     assert abs(two["monthly_default_probability"] - (1 - 0.771**2)) < 1e-12

@@ -19,10 +19,12 @@ TX_SCHEMA = "merchant_id string, purchase_date string, purchase_amount string, c
 
 
 def transaction(merchant="m1", date="2017-01-01 10:00:00", amount="10.00", category="A"):
+    """Build one compact transaction fixture row."""
     return (merchant, date, amount, 1, 2, category, 1, "Y")
 
 
 def test_silver_preserves_rows_and_resolves_names(spark):
+    """Silver preserves grain and applies every merchant fallback."""
     rows = [
         transaction("m1"),
         transaction("missing", category=None),
@@ -52,6 +54,7 @@ def test_silver_preserves_rows_and_resolves_names(spark):
     [("not-a-date", "10"), ("2017-01-01 10:00:00", "not-money"), (None, "10")],
 )
 def test_silver_rejects_invalid_dates_and_amounts(spark, date, amount):
+    """Silver rejects invalid monetary and timestamp values."""
     tx = spark.createDataFrame([transaction(date=date, amount=amount)], TX_SCHEMA)
     merchants = spark.createDataFrame([("m1", "Known")], ["merchant_id", "merchant_name"])
     with pytest.raises(ValueError, match="invalid/null"):
@@ -59,6 +62,7 @@ def test_silver_rejects_invalid_dates_and_amounts(spark, date, amount):
 
 
 def test_silver_requires_columns(spark):
+    """Silver rejects an input missing required columns."""
     tx = spark.createDataFrame([("m1",)], ["merchant_id"])
     merchants = spark.createDataFrame([("m1", "Known")], ["merchant_id", "merchant_name"])
     with pytest.raises(ValueError, match="missing required columns"):
@@ -66,6 +70,7 @@ def test_silver_requires_columns(spark):
 
 
 def test_silver_rejects_empty_transactions(spark):
+    """Silver rejects an empty transaction source."""
     tx = spark.createDataFrame([], "merchant_id string, purchase_date string, purchase_amount string, city_id long, state_id long, category string, installments long, authorized_flag string")
     merchants = spark.createDataFrame([("m1", "Known")], ["merchant_id", "merchant_name"])
     with pytest.raises(ValueError, match="empty"):
