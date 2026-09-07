@@ -12,5 +12,6 @@ data/gold/**/*.crc
 # Local agent instructions
 /AGENTS.md
 /.agents/
+/docs/
 
 BIL-006 · Sr Data Engineer – Python Spark (7).pdf

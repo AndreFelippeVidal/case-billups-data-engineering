@@ -6,7 +6,7 @@ A local PySpark Bronze/Silver/Gold pipeline answering the five questions in the 
 
 - [Analytical report](results/report.md)
 - [Bounded result previews](results/previews.md)
-- `data/gold/`: committed dashboard-ready Parquet outputs for all five questions
+- `data/gold/`: committed dashboard-ready Parquet outputs for all five questions and data quality
 
 The official run preserved and reconciled 7,274,367 transaction attempts totaling 146,228,071,619.260000 supplied monetary units. Recommendations compare all attempts with approved exposure; the report states the limitations around authorization, timezone, currency, costs, and installments.
 
@@ -29,7 +29,7 @@ PySpark is pinned to 3.5.6. The pipeline uses native DataFrame functions and loc
 
 ## Review the dashboard without running the pipeline
 
-The default dashboard reads the committed `data/gold` tables:
+The dashboard reads the committed `data/gold` tables. Use the sidebar to switch between the five-question analysis and the data-quality review:
 
 ```sh
 uv run streamlit run dashboard.py --server.headless false
@@ -82,7 +82,26 @@ results/
 └── previews.md
 ```
 
-Input SHA-256 hashes are stored in `data/bronze/provenance.json`. Silver quality counts are stored in `data/silver/dq.json`, and whole-population reconciliation is stored in `data/gold/reconciliation.json`.
+The run creates a short audit trail:
+
+- `data/bronze/provenance.json` records each input file's byte size and SHA-256 fingerprint. The fingerprint changes if any byte in the downloaded file changes, so it identifies the exact source files used by a run.
+- `data/silver/dq.json` records full-population quality counts calculated while Silver validates and enriches the transactions. Warning rows remain in the data; fatal schema, parsing, fan-out, and empty-input failures stop the run.
+- `data/gold/reconciliation.json` proves that the Gold city aggregate has the same row count and monetary total as Silver.
+- `data/gold/data_quality_summary`, `data_quality_warning_samples`, and `data_quality_merchant_conflicts` publish those checks for the dashboard. They allow the committed Data Quality page to run without local Silver files.
+
+The source has no unique transaction identifier, so identical-looking records cannot be proven to be accidental duplicates. The pipeline preserves repeated attempts and does not publish an unsupported exact-duplicate count.
+
+### How data quality is calculated
+
+Silver evaluates the complete transaction population with PySpark aggregates. For row-level checks, the displayed rate is `affected rows / 7,274,367 processed rows`. Merchant identity collisions are counted at merchant-ID grain, so their dashboard rate is intentionally blank rather than mixing two populations.
+
+The checks have three outcomes:
+
+- **Failed checks stop the stage:** missing required columns, empty transactions, invalid or null parsed dates, invalid or null monetary amounts, merchant join fan-out, Silver row-count loss, or failed Gold row/amount reconciliation.
+- **Warnings preserve and label valid but uncertain data:** missing merchant IDs, unmatched merchant lookups, null/blank categories, unknown city/state identifiers, unknown authorization values, nonpositive amounts, unknown installment values, and merchant IDs with conflicting names.
+- **Informational checks describe the population:** rows processed and denied authorizations. A denied attempt is retained because the challenge asks about recorded transaction activity as well as approved exposure.
+
+For presentation, Gold converts the Silver counts into a long summary table, exports at most five deterministic example rows per supported warning, and copies the 41 merchant-name conflicts. These outputs do not recalculate or alter transaction data.
 
 Open the dashboard after the run:
 
@@ -108,7 +127,7 @@ The same pipeline can be run at explicit stage boundaries. Each command validate
    uv run python -m billups.silver
    ```
 
-3. Silver to Gold, including all five business questions, reconciliation, report, and bounded previews:
+3. Silver to Gold, including all five business questions, reconciliation, committed quality views, report, and bounded previews:
 
    ```sh
    uv run python -m billups.gold
