@@ -31,8 +31,8 @@ flowchart LR
 
     subgraph GOLD[Committed gold outputs with load metadata]
         G13[Q1-Q3<br/>q1_top_merchants<br/>q2_merchant_state<br/>q3_category_hours]
-        G4[Q4<br/>q4_popular_merchants<br/>q4_city_category]
-        G5[Q5<br/>q5_cities · q5_categories<br/>q5_months · q5_hours<br/>q5_installments]
+        G4[Q4<br/>q4_popular_merchants<br/>q4_city_category · q4_association]
+        G5[Q5<br/>q5_overview · q5_cities · q5_categories<br/>q5_months · q5_hours · q5_opening_hours<br/>q5_installments]
         GDQ[Data quality<br/>data_quality_summary<br/>data_quality_warning_samples<br/>data_quality_merchant_conflicts<br/>reconciliation.json]
     end
 
@@ -84,7 +84,7 @@ uv python install 3.12
 uv sync --python 3.12 --locked --dev
 ```
 
-PySpark is pinned to 3.5.6. The pipeline uses native DataFrame functions and local Parquet only.
+PySpark is pinned to 3.5.6. All full-population transformations, quality checks, business metrics, statistical association, rankings, shares, and recommendations use native PySpark DataFrame functions. The project does not use Spark SQL. Streamlit and Altair only format and visualize bounded Gold outputs.
 
 ## Review the dashboard without running the pipeline
 
@@ -147,6 +147,7 @@ The run creates a short audit trail:
 - `data/silver/dq.json` records full-population quality counts calculated while Silver validates and enriches the transactions. Warning rows remain in the data; fatal schema, parsing, fan-out, and empty-input failures stop the run.
 - `data/gold/reconciliation.json` proves that the Gold city aggregate has the same row count and monetary total as Silver.
 - `data/gold/data_quality_summary`, `data_quality_warning_samples`, and `data_quality_merchant_conflicts` publish those checks for the dashboard. They allow the committed Data Quality page to run without local Silver files.
+- `data/gold/q4_association`, `q5_overview`, and `q5_opening_hours` publish the final statistical and recommendation results. Rankings, shares, and installment profitability rates are also stored in their respective Gold tables, so the report and dashboard do not recalculate business metrics.
 
 Silver stores `purchase_amount` as `decimal(28,2)` and adds `silver_load_timestamp` while preserving the Bronze source metadata on transactions. Every Gold Parquet table adds `gold_load_timestamp`. These technical timestamps remain in the data layers but are intentionally omitted from the analytical report, previews, and dashboard tables.
 

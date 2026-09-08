@@ -6,7 +6,13 @@ from billups.transforms import (
     q1_top_merchants,
     q2_merchant_state,
     q3_category_hours,
+    q4_association,
+    q5_categories,
+    q5_cities,
+    q5_hours,
     q5_installments,
+    q5_opening_hours,
+    q5_overview,
     to_silver,
 )
 
@@ -78,6 +84,8 @@ def test_installment_formula_and_unknown_exclusion(spark):
     assert abs(two["monthly_default_probability"] - (1 - 0.771**2)) < 1e-12
     long_plan = result.filter("plan_installments = 10").first()
     assert long_plan["expected_profit_monthly"] < 0
+    assert long_plan["expected_profit_rate_monthly"] < 0
+    assert long_plan["monthly_profitability"] == "Negative"
 
     unknown_row = spark.createDataFrame(
         [("m", "2017-01-01 00:00:00", "5", 1, 1, "A", 999, "Y")], TX_COLUMNS
@@ -86,3 +94,43 @@ def test_installment_formula_and_unknown_exclusion(spark):
     unknown = q5_installments(to_silver(unknown_row, merchants).transactions).first()
     assert unknown["installment_plan"] == "Unknown"
     assert unknown["expected_profit_monthly"] is None
+
+
+def test_cramers_v_is_calculated_in_gold(spark):
+    """Gold Cramer's V distinguishes independent and associated tables."""
+    independent = [(city, category, 10) for city in [1, 2] for category in ["A", "B"]]
+    associated = [(1, "A", 20), (1, "B", 0), (2, "A", 0), (2, "B", 20)]
+    schema = ["city_id", "category", "attempt_count"]
+    assert q4_association(spark.createDataFrame(independent, schema)).first()["cramers_v"] == 0
+    assert q4_association(spark.createDataFrame(associated, schema)).first()["cramers_v"] == 1
+
+
+def test_opening_interval_is_calculated_in_gold_and_can_cross_midnight(spark):
+    """Gold opening interval supports demand spanning midnight."""
+    hours = spark.createDataFrame(
+        [(23, Decimal("50.00")), (0, Decimal("40.00")), (12, Decimal("10.00"))],
+        ["hour", "approved_amount"],
+    )
+    result = q5_opening_hours(hours).first()
+    assert result["start_hour"] == 23
+    assert result["end_hour"] == 1
+    assert result["hours"] == 2
+    assert result["share"] == 0.9
+
+
+def test_gold_recommendation_metrics_are_precomputed(spark):
+    """Gold publishes overview, ranks, shares, and hourly shares."""
+    silver = silver_fixture(spark)
+    overview = q5_overview(silver).first()
+    assert overview["recorded_attempts"] == 10
+    assert overview["approved_attempts"] == 9
+    assert overview["denied_attempts"] == 1
+    assert overview["approval_rate"] == 0.9
+
+    cities = q5_cities(silver).orderBy("rank").collect()
+    categories = q5_categories(silver).orderBy("rank").collect()
+    hours = q5_hours(silver).collect()
+    assert cities[0]["rank"] == 1
+    assert abs(sum(row["approved_share"] for row in cities) - 1) < 1e-12
+    assert abs(sum(row["approved_share"] for row in categories) - 1) < 1e-12
+    assert abs(sum(row["approved_share"] for row in hours) - 1) < 1e-12

@@ -52,6 +52,24 @@ These deterministic samples come from the generated Gold Parquet outputs.
 | 69 | M_ID_50f575c681 | Todd Turner 3 inc | 45912 | 2 | 45912 | 4 |
 | 1 | M_ID_fc7d7969c3 | Mary Gray 7 inc | 44075 | 3 | 44075 | 5 |
 
+## Q4 - City and category association
+
+| Population | City Count | Category Count | Chi Square | Cramers V |
+|---|---|---|---|---|
+| 7274367 | 307 | 4 | 715162.1252112323 | 0.18102727824466436 |
+
+## Q5 - Business overview
+
+| Recorded Amount | Recorded Attempts | Approved Amount | Approved Attempts | Approval Rate |
+|---|---|---|---|---|
+| 146228071619.26 | 7274367 | 133591627397.31 | 6646193 | 0.91364554469138 |
+
+## Q5 - Recommended opening interval
+
+| Start Hour | End Hour | Hours | Covered Amount | Share | Target Share |
+|---|---|---|---|---|---|
+| 9 | 22 | 13 | 109325799014.88 | 0.818358164690502 | 0.8 |
+
 ## Reconciliation
 
 Silver and Gold reconcile at 7,274,367 rows and 146228071619.26 total amount.

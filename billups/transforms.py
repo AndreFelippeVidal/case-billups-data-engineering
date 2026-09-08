@@ -193,6 +193,7 @@ def q4_popular_merchants(silver: DataFrame, global_limit: int = 5) -> DataFrame:
     return (
         by_city.withColumn("city_rank", F.row_number().over(city_rank))
         .join(popular, ["merchant_id", "merchant_name"], "inner")
+        .withColumn("city_share", F.col("city_attempt_count") / F.col("global_attempt_count"))
         .select(
             "city_id",
             "merchant_id",
@@ -201,6 +202,7 @@ def q4_popular_merchants(silver: DataFrame, global_limit: int = 5) -> DataFrame:
             "city_rank",
             "global_attempt_count",
             "global_rank",
+            "city_share",
         )
     )
 
@@ -208,6 +210,45 @@ def q4_popular_merchants(silver: DataFrame, global_limit: int = 5) -> DataFrame:
 def q4_city_category(silver: DataFrame) -> DataFrame:
     """Build the city and category transaction contingency table."""
     return silver.groupBy("city_id", "category").agg(F.count(F.lit(1)).alias("attempt_count"))
+
+
+def q4_association(contingency: DataFrame) -> DataFrame:
+    """Calculate Cramer's V for category and known transaction city."""
+    usable = contingency.filter(F.col("city_id").isNotNull() & (F.col("city_id") != -1))
+    city_totals = usable.groupBy("city_id").agg(F.sum("attempt_count").alias("city_total"))
+    category_totals = usable.groupBy("category").agg(
+        F.sum("attempt_count").alias("category_total")
+    )
+    dimensions = usable.agg(
+        F.sum("attempt_count").alias("population"),
+        F.countDistinct("city_id").alias("city_count"),
+        F.countDistinct("category").alias("category_count"),
+    )
+    components = (
+        usable.join(city_totals, "city_id")
+        .join(category_totals, "category")
+        .crossJoin(dimensions.select("population"))
+        .withColumn(
+            "chi_component",
+            F.pow(F.col("attempt_count"), 2)
+            / (F.col("city_total") * F.col("category_total") / F.col("population")),
+        )
+    )
+    chi_square = components.agg(
+        (F.sum("chi_component") - F.first("population")).alias("chi_square")
+    )
+    denominator = F.col("population") * F.least(
+        F.col("city_count") - F.lit(1), F.col("category_count") - F.lit(1)
+    )
+    return dimensions.crossJoin(chi_square).select(
+        "population",
+        "city_count",
+        "category_count",
+        F.greatest(F.col("chi_square"), F.lit(0.0)).alias("chi_square"),
+        F.when(denominator > 0, F.sqrt(F.greatest(F.col("chi_square"), F.lit(0.0)) / denominator))
+        .otherwise(F.lit(0.0))
+        .alias("cramers_v"),
+    )
 
 
 def _q5_dimension(silver: DataFrame, *dimensions: F.Column | str) -> DataFrame:
@@ -220,19 +261,31 @@ def _q5_dimension(silver: DataFrame, *dimensions: F.Column | str) -> DataFrame:
     )
 
 
+def _rank_and_share(frame: DataFrame, tie_breaker: str) -> DataFrame:
+    """Add deterministic approved-amount rank and population share."""
+    rank = Window.orderBy(F.desc("approved_amount"), F.asc_nulls_last(tie_breaker))
+    total = Window.rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+    return frame.withColumn("rank", F.row_number().over(rank)).withColumn(
+        "approved_share",
+        F.when(F.sum("approved_amount").over(total) != 0,
+               F.col("approved_amount").cast("double")
+               / F.sum("approved_amount").over(total).cast("double")).otherwise(F.lit(0.0)),
+    )
+
+
 def q5_cities(silver: DataFrame) -> DataFrame:
     """Build city-level recommendation measures."""
-    return _q5_dimension(silver, "city_id")
+    return _rank_and_share(_q5_dimension(silver, "city_id"), "city_id")
 
 
 def q5_categories(silver: DataFrame) -> DataFrame:
     """Build category-level recommendation measures."""
-    return _q5_dimension(silver, "category")
+    return _rank_and_share(_q5_dimension(silver, "category"), "category")
 
 
 def q5_months(silver: DataFrame) -> DataFrame:
     """Build monthly measures with observed-date exposure."""
-    return _q5_dimension(
+    monthly = _q5_dimension(
         silver,
         F.date_format("purchase_date", "yyyy-MM").alias("year_month"),
     ).join(
@@ -245,11 +298,82 @@ def q5_months(silver: DataFrame) -> DataFrame:
     ).withColumn(
         "approved_amount_per_observed_day", F.col("approved_amount") / F.col("observed_days")
     )
+    rank = Window.orderBy(F.desc("approved_amount_per_observed_day"), F.asc("year_month"))
+    return monthly.withColumn("exposure_adjusted_rank", F.row_number().over(rank))
 
 
 def q5_hours(silver: DataFrame) -> DataFrame:
     """Build hourly recommendation measures."""
-    return _q5_dimension(silver, F.hour("purchase_date").alias("hour"))
+    frame = _q5_dimension(silver, F.hour("purchase_date").alias("hour"))
+    total = Window.rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+    return frame.withColumn(
+        "approved_share",
+        F.when(
+            F.sum("approved_amount").over(total) != 0,
+            F.col("approved_amount").cast("double")
+            / F.sum("approved_amount").over(total).cast("double"),
+        ).otherwise(F.lit(0.0)),
+    )
+
+
+def q5_opening_hours(hours: DataFrame, target_share: float = 0.8) -> DataFrame:
+    """Find the shortest circular hour interval reaching the target approved share."""
+    spark = hours.sparkSession
+    starts = spark.range(24).select(F.col("id").cast("int").alias("start_hour"))
+    lengths = spark.range(1, 25).select(F.col("id").cast("int").alias("hours"))
+    expanded = starts.crossJoin(lengths).withColumn(
+        "offset", F.explode(F.sequence(F.lit(0), F.col("hours") - F.lit(1)))
+    ).withColumn("hour", F.pmod(F.col("start_hour") + F.col("offset"), F.lit(24)))
+    covered = (
+        expanded.join(hours.select("hour", "approved_amount"), "hour", "left")
+        .groupBy("start_hour", "hours")
+        .agg(F.sum(F.coalesce("approved_amount", F.lit(0).cast(MONEY))).alias("covered_amount"))
+    )
+    total = hours.agg(F.sum("approved_amount").alias("total_approved_amount"))
+    candidates = (
+        covered.crossJoin(total)
+        .withColumn(
+            "share",
+            F.when(F.col("total_approved_amount") > 0,
+                   F.col("covered_amount").cast("double")
+                   / F.col("total_approved_amount").cast("double")).otherwise(F.lit(0.0)),
+        )
+        .filter(F.col("share") >= F.lit(target_share))
+    )
+    choice = Window.orderBy(F.asc("hours"), F.asc("start_hour"))
+    return (
+        candidates.withColumn("choice", F.row_number().over(choice))
+        .filter(F.col("choice") == 1)
+        .select(
+            "start_hour",
+            F.pmod(F.col("start_hour") + F.col("hours"), F.lit(24)).alias("end_hour"),
+            "hours",
+            "covered_amount",
+            "total_approved_amount",
+            "share",
+            F.lit(target_share).alias("target_share"),
+        )
+    )
+
+
+def q5_overview(silver: DataFrame) -> DataFrame:
+    """Build whole-population business and authorization KPIs."""
+    approved = F.col("authorized_flag") == "Y"
+    return silver.agg(
+        F.sum("purchase_amount").alias("recorded_amount"),
+        F.count(F.lit(1)).alias("recorded_attempts"),
+        F.avg("purchase_amount").alias("average_recorded_amount"),
+        F.countDistinct("city_id").alias("city_count"),
+        F.countDistinct(F.date_format("purchase_date", "yyyy-MM")).alias("month_count"),
+        F.sum(F.when(approved, F.lit(1)).otherwise(F.lit(0))).alias("approved_attempts"),
+        F.sum(F.when(approved, F.col("purchase_amount")).otherwise(F.lit(0).cast(MONEY))).alias(
+            "approved_amount"
+        ),
+    ).withColumn(
+        "denied_attempts", F.col("recorded_attempts") - F.col("approved_attempts")
+    ).withColumn(
+        "approval_rate", F.col("approved_attempts") / F.col("recorded_attempts")
+    )
 
 
 def q5_installments(silver: DataFrame) -> DataFrame:
@@ -287,20 +411,46 @@ def q5_installments(silver: DataFrame) -> DataFrame:
                 F.col("approved_amount") * F.lit(0.1355),
             ),
         )
+        .withColumn(
+            "expected_profit_rate_monthly",
+            F.when(
+                F.col("approved_amount") > 0,
+                F.col("expected_profit_monthly").cast("double")
+                / F.col("approved_amount").cast("double"),
+            ),
+        )
+        .withColumn(
+            "expected_profit_rate_flat_lifetime",
+            F.when(
+                F.col("approved_amount") > 0,
+                F.col("expected_profit_flat_lifetime").cast("double")
+                / F.col("approved_amount").cast("double"),
+            ),
+        )
+        .withColumn(
+            "monthly_profitability",
+            F.when(F.col("expected_profit_rate_monthly") >= 0, F.lit("Positive"))
+            .when(F.col("expected_profit_rate_monthly").isNotNull(), F.lit("Negative")),
+        )
     )
 
 
 def gold_frames(silver: DataFrame) -> dict[str, DataFrame]:
     """Return every named Gold business output."""
+    contingency = q4_city_category(silver)
+    hours = q5_hours(silver)
     return {
         "q1_top_merchants": q1_top_merchants(silver),
         "q2_merchant_state": q2_merchant_state(silver),
         "q3_category_hours": q3_category_hours(silver),
         "q4_popular_merchants": q4_popular_merchants(silver),
-        "q4_city_category": q4_city_category(silver),
+        "q4_city_category": contingency,
+        "q4_association": q4_association(contingency),
+        "q5_overview": q5_overview(silver),
         "q5_cities": q5_cities(silver),
         "q5_categories": q5_categories(silver),
         "q5_months": q5_months(silver),
-        "q5_hours": q5_hours(silver),
+        "q5_hours": hours,
+        "q5_opening_hours": q5_opening_hours(hours),
         "q5_installments": q5_installments(silver),
     }

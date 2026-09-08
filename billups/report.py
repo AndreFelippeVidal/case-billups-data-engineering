@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -12,56 +11,6 @@ from pyspark.sql import functions as F
 
 
 MONTH_NAMES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-
-
-def cramers_v(rows: list[dict[str, Any]]) -> float:
-    """Calculate descriptive Cramer's V from city/category counts."""
-    usable = [r for r in rows if r["city_id"] not in (None, -1)]
-    cities = sorted({r["city_id"] for r in usable})
-    categories = sorted({r["category"] for r in usable})
-    if len(cities) < 2 or len(categories) < 2:
-        return 0.0
-    counts = {(r["city_id"], r["category"]): int(r["attempt_count"]) for r in usable}
-    row_totals = {city: sum(counts.get((city, category), 0) for category in categories) for city in cities}
-    column_totals = {
-        category: sum(counts.get((city, category), 0) for city in cities) for category in categories
-    }
-    total = sum(row_totals.values())
-    denominator = total * min(len(cities) - 1, len(categories) - 1)
-    if denominator == 0:
-        return 0.0
-    chi_square = 0.0
-    for city in cities:
-        for category in categories:
-            expected = row_totals[city] * column_totals[category] / total
-            if expected:
-                observed = counts.get((city, category), 0)
-                chi_square += (observed - expected) ** 2 / expected
-    return math.sqrt(chi_square / denominator)
-
-
-def smallest_circular_interval(hour_amounts: dict[int, Decimal], target_share: float = 0.8) -> dict[str, Any]:
-    """Find the shortest deterministic circular hour interval reaching a target share."""
-    amounts = [Decimal(hour_amounts.get(hour, 0)) for hour in range(24)]
-    total = sum(amounts)
-    if total <= 0:
-        return {"start_hour": 0, "end_hour": 0, "hours": 0, "share": 0.0}
-    target = total * Decimal(str(target_share))
-    candidates: list[tuple[int, int, Decimal]] = []
-    for start in range(24):
-        covered = Decimal(0)
-        for length in range(1, 25):
-            covered += amounts[(start + length - 1) % 24]
-            if covered >= target:
-                candidates.append((length, start, covered))
-                break
-    length, start, covered = min(candidates, key=lambda item: (item[0], item[1]))
-    return {
-        "start_hour": start,
-        "end_hour": (start + length) % 24,
-        "hours": length,
-        "share": float(covered / total),
-    }
 
 
 def _records(frame: DataFrame, limit: int | None = None) -> list[dict[str, Any]]:
@@ -91,21 +40,22 @@ def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, An
     popular_merchants = _records(
         gold["q4_popular_merchants"].orderBy("global_rank", F.desc("city_attempt_count"))
     )
-    cities = _records(gold["q5_cities"].orderBy("approved_amount", ascending=False), 5)
-    categories = _records(gold["q5_categories"].orderBy("approved_amount", ascending=False), 5)
-    months = _records(gold["q5_months"].orderBy("approved_amount_per_observed_day", ascending=False), 5)
+    cities = _records(gold["q5_cities"].orderBy("rank"), 5)
+    categories = _records(gold["q5_categories"].orderBy("rank"), 5)
+    months = _records(gold["q5_months"].orderBy("exposure_adjusted_rank"), 5)
     installments = _records(gold["q5_installments"].orderBy("plan_installments"))
-    contingency = _records(gold["q4_city_category"])
-    hours = _records(gold["q5_hours"])
-    association = cramers_v(contingency)
-    interval = smallest_circular_interval(
-        {int(row["hour"]): Decimal(row["approved_amount"]) for row in hours}
-    )
+    association = _records(gold["q4_association"])[0]
+    interval = _records(gold["q5_opening_hours"])[0]
+    overview = _records(gold["q5_overview"])[0]
 
     lines = [
         "# Billups historical transaction analysis",
         "",
         "This report answers the five questions in the supplied case. A recorded attempt is every source row regardless of authorization; an approved attempt is a row with `authorized_flag = Y` and is the closer proxy for realized sales. The source has no unique transaction ID, so counts are attempts rather than deduplicated purchases.",
+        "",
+        "## Gold business overview",
+        "",
+        f"The Gold overview records **{overview['recorded_attempts']:,}** attempts totaling **{_money(overview['recorded_amount'])}**, with an average recorded amount of **{_money(overview['average_recorded_amount'])}** across **{overview['city_count']:,}** cities and **{overview['month_count']:,}** months. **{overview['approved_attempts']:,}** attempts were approved ({overview['approval_rate']:.1%}), totaling **{_money(overview['approved_amount'])}**; **{overview['denied_attempts']:,}** were not approved.",
         "",
         "## Q1 - Monthly top merchants by city",
         "",
@@ -156,7 +106,7 @@ def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, An
     )
     lines.extend([
         "",
-        f"Cramer's V for known cities is **{association:.4f}**. This is a descriptive association between anonymized city and category, not evidence that location causes category demand. Unknown categories remain in the calculation; null and -1 city values are reported in Gold but excluded from this statistic.",
+        f"Cramer's V for known cities is **{association['cramers_v']:.4f}**, calculated in Gold from {association['population']:,} attempts across {association['city_count']:,} cities and {association['category_count']:,} categories. This is a descriptive association between anonymized city and category, not evidence that location causes category demand. Unknown categories remain in the calculation; null and -1 city values are reported in Gold but excluded from this statistic.",
         "",
         "## Q5 - Advice for a new merchant",
         "",
@@ -164,11 +114,11 @@ def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, An
         "",
         "Prioritize the leading cities below for further validation because they have the largest approved historical amount. City IDs are anonymized, so operational feasibility still needs local context.",
         "",
-        "| City ID | Approved amount | Approved attempts | All-attempt amount |",
-        "|---:|---:|---:|---:|",
+        "| Rank | City ID | Approved amount | Approved share | Approved attempts | All-attempt amount |",
+        "|---:|---:|---:|---:|---:|---:|",
     ])
     lines.extend(
-        f"| {row['city_id']} | {_money(row['approved_amount'])} | {row['approved_count']:,} | {_money(row['all_attempt_amount'])} |"
+        f"| {row['rank']} | {row['city_id']} | {_money(row['approved_amount'])} | {row['approved_share']:.2%} | {row['approved_count']:,} | {_money(row['all_attempt_amount'])} |"
         for row in cities
     )
     lines.extend([
@@ -177,11 +127,11 @@ def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, An
         "",
         "Use the leading approved-exposure categories as candidates for market research; historical amount alone does not establish margin or future demand.",
         "",
-        "| Category | Approved amount | Approved attempts | All-attempt amount |",
-        "|---|---:|---:|---:|",
+        "| Rank | Category | Approved amount | Approved share | Approved attempts | All-attempt amount |",
+        "|---:|---|---:|---:|---:|---:|",
     ])
     lines.extend(
-        f"| {row['category']} | {_money(row['approved_amount'])} | {row['approved_count']:,} | {_money(row['all_attempt_amount'])} |"
+        f"| {row['rank']} | {row['category']} | {_money(row['approved_amount'])} | {row['approved_share']:.2%} | {row['approved_count']:,} | {_money(row['all_attempt_amount'])} |"
         for row in categories
     )
     lines.extend([
@@ -201,20 +151,21 @@ def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, An
         "",
         "### d. Hours",
         "",
-        f"A deterministic smallest circular interval covering at least 80% of approved amount starts at **{interval['start_hour']:02d}:00** and closes at **{interval['end_hour']:02d}:00** after {interval['hours']} hours (observed share {interval['share']:.1%}). This describes recorded demand. The source does not specify a timezone or operating costs, so it is not a profit-optimal schedule.",
+        f"A deterministic smallest circular interval covering at least 80% of approved amount starts at **{interval['start_hour']:02d}:00** and closes at **{interval['end_hour']:02d}:00** after {interval['hours']} hours. It covers **{_money(interval['covered_amount'])}**, or {interval['share']:.1%} of the Gold approved total. This describes recorded demand. The source does not specify a timezone or operating costs, so it is not a profit-optimal schedule.",
         "",
         "### e. Installments",
         "",
         "The model treats values 0 and 1 as a one-payment baseline, n >= 2 except 999 as installment plans, and other values as unknown. Unknown values stay in Gold and are excluded from modeled profit. For n payments, cumulative default probability is 1 - 0.771^n. With 25% gross margin and 50% of value paid before default, expected profit is approved amount x (0.25 - 0.5 x probability). The flat-lifetime scenario applies 22.9% once. Half payment means half the transaction value, including odd installment counts.",
         "",
-        "| Plan | Approved exposure | All-attempt exposure | Monthly-default expected profit | Flat-lifetime expected profit |",
-        "|---|---:|---:|---:|---:|",
+        "| Plan | Approved exposure | All-attempt exposure | Monthly expected rate | Monthly-default expected profit | Flat-lifetime expected profit |",
+        "|---|---:|---:|---:|---:|---:|",
     ])
     for row in installments:
         monthly = "Excluded" if row["expected_profit_monthly"] is None else _money(row["expected_profit_monthly"])
         flat = "Excluded" if row["expected_profit_flat_lifetime"] is None else _money(row["expected_profit_flat_lifetime"])
+        rate = "Excluded" if row["expected_profit_rate_monthly"] is None else f"{row['expected_profit_rate_monthly']:.2%}"
         lines.append(
-            f"| {row['installment_plan']} | {_money(row['approved_amount'])} | {_money(row['all_attempt_amount'])} | {monthly} | {flat} |"
+            f"| {row['installment_plan']} | {_money(row['approved_amount'])} | {_money(row['all_attempt_amount'])} | {rate} | {monthly} | {flat} |"
         )
     lines.extend([
         "",
@@ -226,7 +177,7 @@ def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, An
         "",
     ])
     destination.write_text("\n".join(lines), encoding="utf-8")
-    return {"cramers_v": association, "opening_interval": interval}
+    return {"cramers_v": association["cramers_v"], "opening_interval": interval}
 
 
 def _markdown_table(rows: list[dict[str, Any]], columns: list[str]) -> list[str]:
@@ -270,6 +221,24 @@ def render_previews(
             gold["q4_popular_merchants"].orderBy("global_rank", F.desc("city_attempt_count")),
             ["city_id", "merchant_id", "merchant_name", "city_attempt_count", "city_rank", "global_attempt_count", "global_rank"],
             10,
+        ),
+        (
+            "Q4 - City and category association",
+            gold["q4_association"],
+            ["population", "city_count", "category_count", "chi_square", "cramers_v"],
+            1,
+        ),
+        (
+            "Q5 - Business overview",
+            gold["q5_overview"],
+            ["recorded_amount", "recorded_attempts", "approved_amount", "approved_attempts", "approval_rate"],
+            1,
+        ),
+        (
+            "Q5 - Recommended opening interval",
+            gold["q5_opening_hours"],
+            ["start_hour", "end_hour", "hours", "covered_amount", "share", "target_share"],
+            1,
         ),
     ]
     lines = [

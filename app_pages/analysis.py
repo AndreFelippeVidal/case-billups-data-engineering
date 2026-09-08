@@ -8,9 +8,6 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from billups.report import cramers_v, smallest_circular_interval
-
-
 PROJECT_ROOT = Path(__file__).parents[1]
 GOLD = Path(os.environ.get("BILLUPS_GOLD_DIR", PROJECT_ROOT / "data" / "gold"))
 MONTH_NAMES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -77,9 +74,6 @@ def merchant_city_chart(frame: pd.DataFrame) -> None:
     """Show each popular merchant's recorded attempts split across cities."""
     chart_data = frame.copy()
     chart_data["city_label"] = chart_data["city_id"].astype(str)
-    chart_data["city_share"] = (
-        chart_data["city_attempt_count"] / chart_data["global_attempt_count"]
-    )
     merchant_order = (
         chart_data.sort_values("global_rank")["merchant_name"].drop_duplicates().tolist()
     )
@@ -134,12 +128,6 @@ def installment_profitability_chart(frame: pd.DataFrame) -> None:
     chart_data = frame[
         frame["plan_installments"].between(1, 12) & (frame["approved_amount"] > 0)
     ].copy()
-    chart_data["expected_profit_rate"] = (
-        chart_data["expected_profit_monthly"] / chart_data["approved_amount"]
-    )
-    chart_data["Outcome"] = chart_data["expected_profit_rate"].map(
-        lambda value: "Positive" if value >= 0 else "Negative"
-    )
     base = alt.Chart(chart_data).encode(
         x=alt.X(
             "plan_installments:Q",
@@ -147,17 +135,18 @@ def installment_profitability_chart(frame: pd.DataFrame) -> None:
             axis=alt.Axis(values=list(range(1, 13)), format="d"),
             scale=alt.Scale(domain=[1, 12]),
         ),
-        y=alt.Y("expected_profit_rate:Q", title="Expected profit per approved unit", axis=alt.Axis(format=".0%")),
+        y=alt.Y("expected_profit_rate_monthly:Q", title="Expected profit per approved unit", axis=alt.Axis(format=".0%")),
     )
     line = base.mark_line(color="#9c9c9c")
     points = base.mark_point(filled=True, size=90).encode(
         color=alt.Color(
-            "Outcome:N",
+            "monthly_profitability:N",
+            title="Outcome",
             scale=alt.Scale(domain=["Positive", "Negative"], range=["#2ca02c", "#d62728"]),
         ),
         tooltip=[
             alt.Tooltip("plan_installments:Q", title="Payments"),
-            alt.Tooltip("expected_profit_rate:Q", title="Expected Profit Rate", format=".2%"),
+            alt.Tooltip("expected_profit_rate_monthly:Q", title="Expected Profit Rate", format=".2%"),
         ],
     )
     zero = alt.Chart(pd.DataFrame({"zero": [0]})).mark_rule(strokeDash=[5, 5], color="#777").encode(y="zero:Q")
@@ -171,37 +160,39 @@ if not GOLD.exists():
     st.error("Gold outputs are missing. Run the pipeline command from README.md first.")
     st.stop()
 
-q5_cities = load_table("q5_cities").sort_values("approved_amount", ascending=False)
-q5_categories = load_table("q5_categories").sort_values("approved_amount", ascending=False)
+q5_cities = load_table("q5_cities").sort_values("rank")
+q5_categories = load_table("q5_categories").sort_values("rank")
 q5_months = load_table("q5_months").sort_values("year_month")
 q5_hours = load_table("q5_hours").sort_values("hour")
+overview_values = load_table("q5_overview").iloc[0]
+opening_hours = load_table("q5_opening_hours").iloc[0]
 leading_city_ids = ", ".join(str(value) for value in q5_cities.head(5)["city_id"])
 leading_categories = ", ".join(
     str(value) for value in q5_categories[q5_categories["category"] != "Unknown category"].head(3)["category"]
 )
 leading_months = (
-    q5_months.sort_values("approved_amount_per_observed_day", ascending=False)
+    q5_months.sort_values("exposure_adjusted_rank")
     .head(5)["year_month"]
     .map(month_label)
     .str.cat(sep=", ")
 )
 
-total_approved = q5_cities["approved_amount"].sum()
-total_recorded = q5_cities["all_attempt_amount"].sum()
-total_attempts = int(q5_cities["all_attempt_count"].sum())
-approved_attempts = int(q5_cities["approved_count"].sum())
-denied_attempts = total_attempts - approved_attempts
+total_approved = overview_values["approved_amount"]
+total_recorded = overview_values["recorded_amount"]
+total_attempts = int(overview_values["recorded_attempts"])
+approved_attempts = int(overview_values["approved_attempts"])
+denied_attempts = int(overview_values["denied_attempts"])
 st.subheader("Business overview")
 overview = st.columns(5)
 overview[0].metric("Recorded amount", f"${total_recorded / 1_000_000_000:,.1f}B")
 overview[1].metric("Recorded attempts", f"{total_attempts:,}")
-overview[2].metric("Average recorded amount", f"${total_recorded / total_attempts:,.2f}")
-overview[3].metric("Cities", f"{q5_cities['city_id'].nunique():,}")
-overview[4].metric("Months", f"{q5_months['year_month'].nunique():,}")
+overview[2].metric("Average recorded amount", f"${overview_values['average_recorded_amount']:,.2f}")
+overview[3].metric("Cities", f"{int(overview_values['city_count']):,}")
+overview[4].metric("Months", f"{int(overview_values['month_count']):,}")
 st.subheader("Authorization context")
 authorization = st.columns(5)
 authorization[0].metric("Approved attempts", f"{approved_attempts:,}")
-authorization[1].metric("Approval rate", f"{approved_attempts / total_attempts:.1%}")
+authorization[1].metric("Approval rate", f"{overview_values['approval_rate']:.1%}")
 authorization[2].metric("Approved amount", f"${total_approved:,.2f}")
 st.caption(
     "Recorded attempts are all source transaction rows, regardless of authorization. "
@@ -278,10 +269,9 @@ with tab4:
     })
     show_table(q4_display)
 
-    contingency = load_table("q4_city_category")
-    association = cramers_v(contingency.to_dict("records"))
+    association = load_table("q4_association").iloc[0]
     st.subheader("City and category association")
-    st.metric("Cramer's V", f"{association:.4f}")
+    st.metric("Cramer's V", f"{association['cramers_v']:.4f}")
     st.write(
         "The result indicates a weak descriptive association between transaction city and category. "
         "It does not show that location causes category demand. Unknown categories are retained, "
@@ -289,9 +279,6 @@ with tab4:
     )
 
 with tab5:
-    interval = smallest_circular_interval(
-        {int(row.hour): Decimal(str(row.approved_amount)) for row in q5_hours.itertuples()}
-    )
     st.info(
         "Advice is based strictly on the historical transactions. Approved attempts are used as the "
         "sales proxy. City and category IDs are anonymized; the source currency and business timezone "
@@ -308,8 +295,6 @@ with tab5:
         )
         ordered_bar_chart(q5_cities.head(10), "city_id", "approved_amount", "City ID")
         city_table = q5_cities.head(10).copy()
-        city_table["rank"] = range(1, len(city_table) + 1)
-        city_table["approved_share"] = city_table["approved_amount"] / total_approved
         city_table = city_table[
             ["rank", "city_id", "approved_amount", "approved_count", "approved_share"]
         ].rename(columns={
@@ -329,8 +314,6 @@ with tab5:
         )
         ordered_bar_chart(q5_categories.head(10), "category", "approved_amount", "Category")
         category_table = q5_categories.copy()
-        category_table["rank"] = range(1, len(category_table) + 1)
-        category_table["approved_share"] = category_table["approved_amount"] / total_approved
         category_table = category_table[
             ["rank", "category", "approved_amount", "approved_count", "approved_share"]
         ].rename(columns={
@@ -352,15 +335,16 @@ with tab5:
     with right:
         st.subheader("d. Recommended opening hours")
         st.write(
-            f"Open at {interval['start_hour']:02d}:00 and close at {interval['end_hour']:02d}:00. "
-            f"This shortest contiguous interval covers {interval['share']:.1%} of approved historical "
+            f"Open at {int(opening_hours['start_hour']):02d}:00 and close at "
+            f"{int(opening_hours['end_hour']):02d}:00. This shortest contiguous interval covers "
+            f"{opening_hours['share']:.1%} of approved historical "
             "amount; operating costs and the unknown source timezone may change the practical schedule."
         )
         hourly_demand_chart(q5_hours)
         midnight = q5_hours[q5_hours["hour"] == 0].iloc[0]
         st.warning(
             f"The midnight bucket contains {int(midnight['approved_count']):,} approved attempts and "
-            f"${midnight['approved_amount']:,.2f}, or {midnight['approved_amount'] / total_approved:.1%} "
+            f"${midnight['approved_amount']:,.2f}, or {midnight['approved_share']:.1%} "
             "of approved amount. Its level is unusual relative to neighboring hours. It may represent "
             "real behavior, timezone conversion, or batched/default timestamps; the source does not "
             "contain enough context to distinguish these explanations."
