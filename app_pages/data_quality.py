@@ -44,6 +44,18 @@ def format_metric(count: int, rate: float | None = None, rows: bool = False) -> 
     return f"{count:,}"
 
 
+QUALITY_HELP = {
+    "Rows processed": "Count of Silver transaction rows evaluated by the complete quality-check set.",
+    "Rows dropped": "Silver rows minus rows reconciled through the Gold city aggregate.",
+    "Missing merchant ID": "Rows with a null merchant_id divided by all processed rows.",
+    "Merchant identity collisions": "Merchant IDs linked to more than one distinct nonblank source name.",
+    "Unknown category": "Rows whose null or blank category was retained as Unknown category, divided by all rows.",
+    "Unknown state": "Rows with a null or -1 State ID divided by all processed rows.",
+    "Unknown installments": "Rows with null, negative, or sentinel 999 installments; these remain in the dataset.",
+    "Denied authorization": "Rows where authorized_flag equals N, divided by all processed rows.",
+}
+
+
 st.title("Data quality")
 st.caption(
     "These check results are committed Gold artifacts. This page can be reviewed without raw, "
@@ -65,7 +77,11 @@ for column, name, use_rate in zip(
     [False, False, True, False],
 ):
     count, rate = metric_value(summary, name)
-    column.metric(name, format_metric(count, rate if use_rate else None))
+    column.metric(
+        name,
+        format_metric(count, rate if use_rate else None),
+        help=QUALITY_HELP[name],
+    )
 
 second_row = st.columns(4)
 for column, name, use_rate, rows in zip(
@@ -75,7 +91,11 @@ for column, name, use_rate, rows in zip(
     [False, False, True, False],
 ):
     count, rate = metric_value(summary, name)
-    column.metric(name, format_metric(count, rate if use_rate else None, rows=rows))
+    column.metric(
+        name,
+        format_metric(count, rate if use_rate else None, rows=rows),
+        help=QUALITY_HELP[name],
+    )
 
 st.info(
     "The pipeline fails on missing required columns, invalid dates or amounts, empty input, merchant "
@@ -97,7 +117,19 @@ summary_display["Population"] = summary_display["Population"].map(
 st.dataframe(
     summary_display,
     column_config={
-        "Rate": st.column_config.NumberColumn("Rate", format="percent"),
+        "Status": st.column_config.TextColumn(
+            "Status",
+            help="Passed means no affected rows; Warning preserves uncertain rows; Informational describes context.",
+        ),
+        "Affected Rows": st.column_config.TextColumn(
+            "Affected Rows", help="Number of rows or entities matching the quality-check condition."
+        ),
+        "Population": st.column_config.TextColumn(
+            "Population", help="Denominator used for the rate; blank when the check has a different grain."
+        ),
+        "Rate": st.column_config.NumberColumn(
+            "Rate", help="Affected Rows divided by Population when both use the same grain.", format="percent"
+        ),
     },
     use_container_width=True,
     hide_index=True,
@@ -117,7 +149,19 @@ conflict_display = conflict_display.rename(columns={
     "merchant_id": "Merchant ID", "nonblank_names": "Source Names",
     "distinct_name_count": "Distinct Names",
 })
-st.dataframe(conflict_display, use_container_width=True, hide_index=True)
+st.dataframe(
+    conflict_display,
+    column_config={
+        "Source Names": st.column_config.TextColumn(
+            "Source Names", help="Distinct nonblank names found for the same Merchant ID."
+        ),
+        "Distinct Names": st.column_config.NumberColumn(
+            "Distinct Names", help="Count of distinct nonblank source names associated with the Merchant ID."
+        ),
+    },
+    use_container_width=True,
+    hide_index=True,
+)
 
 st.subheader("Warning samples")
 st.write(

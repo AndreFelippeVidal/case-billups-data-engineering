@@ -29,9 +29,14 @@ def load_table(name: str) -> pd.DataFrame:
     return frame
 
 
-def currency_column(label: str) -> st.column_config.NumberColumn:
+def currency_column(label: str, help_text: str) -> st.column_config.NumberColumn:
     """Build a dashboard column formatted as US dollars."""
-    return st.column_config.NumberColumn(label, format="$%.2f")
+    return st.column_config.NumberColumn(label, help=help_text, format="$%.2f")
+
+
+def number_column(label: str, help_text: str, format_value: str | None = None):
+    """Build a numeric column with an explanatory header tooltip."""
+    return st.column_config.NumberColumn(label, help=help_text, format=format_value)
 
 
 def month_label(value: str) -> str:
@@ -184,16 +189,48 @@ approved_attempts = int(overview_values["approved_attempts"])
 denied_attempts = int(overview_values["denied_attempts"])
 st.subheader("Business overview")
 overview = st.columns(5)
-overview[0].metric("Recorded amount", f"${total_recorded / 1_000_000_000:,.1f}B")
-overview[1].metric("Recorded attempts", f"{total_attempts:,}")
-overview[2].metric("Average recorded amount", f"${overview_values['average_recorded_amount']:,.2f}")
-overview[3].metric("Cities", f"{int(overview_values['city_count']):,}")
-overview[4].metric("Months", f"{int(overview_values['month_count']):,}")
+overview[0].metric(
+    "Recorded amount",
+    f"${total_recorded / 1_000_000_000:,.1f}B",
+    help="Sum of purchase_amount across every recorded transaction attempt.",
+)
+overview[1].metric(
+    "Recorded attempts",
+    f"{total_attempts:,}",
+    help="Count of all source transaction rows, regardless of authorization status.",
+)
+overview[2].metric(
+    "Average recorded amount",
+    f"${overview_values['average_recorded_amount']:,.2f}",
+    help="Recorded amount divided by recorded attempts.",
+)
+overview[3].metric(
+    "Cities",
+    f"{int(overview_values['city_count']):,}",
+    help="Count of distinct transaction City IDs observed in the source.",
+)
+overview[4].metric(
+    "Months",
+    f"{int(overview_values['month_count']):,}",
+    help="Count of distinct calendar year-months observed in purchase timestamps.",
+)
 st.subheader("Authorization context")
 authorization = st.columns(5)
-authorization[0].metric("Approved attempts", f"{approved_attempts:,}")
-authorization[1].metric("Approval rate", f"{overview_values['approval_rate']:.1%}")
-authorization[2].metric("Approved amount", f"${total_approved:,.2f}")
+authorization[0].metric(
+    "Approved attempts",
+    f"{approved_attempts:,}",
+    help="Count of source rows where authorized_flag equals Y.",
+)
+authorization[1].metric(
+    "Approval rate",
+    f"{overview_values['approval_rate']:.1%}",
+    help="Approved attempts divided by all recorded attempts.",
+)
+authorization[2].metric(
+    "Approved amount",
+    f"${total_approved:,.2f}",
+    help="Sum of purchase_amount for rows where authorized_flag equals Y.",
+)
 st.caption(
     "Recorded attempts are all source transaction rows, regardless of authorization. "
     f"Approved attempts are the {approved_attempts:,} rows with authorized_flag = Y; "
@@ -223,7 +260,17 @@ with tab1:
         })
     )
     q1_display["Month"] = q1_display["Month"].map(month_label)
-    show_table(q1_display, {"Purchase Total": currency_column("Purchase Total")})
+    show_table(q1_display, {
+        "Rank": number_column(
+            "Rank", "Position within the selected month and city by descending Purchase Total."
+        ),
+        "Purchase Total": currency_column(
+            "Purchase Total", "Sum of recorded purchase_amount for this month, city, and merchant."
+        ),
+        "No of Sales": number_column(
+            "No of Sales", "Count of recorded transaction attempts for this month, city, and merchant."
+        ),
+    })
 
 with tab2:
     st.caption(
@@ -236,7 +283,12 @@ with tab2:
         [["merchant", "state_id", "average_amount"]]
         .rename(columns={"merchant": "Merchant", "state_id": "State ID", "average_amount": "Average Amount"})
     )
-    show_table(q2_display, {"Average Amount": currency_column("Average Amount")})
+    show_table(q2_display, {
+        "Average Amount": currency_column(
+            "Average Amount",
+            "Arithmetic mean: total recorded purchase amount divided by attempts for the merchant and state.",
+        )
+    })
 
 with tab3:
     st.info(
@@ -248,7 +300,14 @@ with tab3:
     q3_display = q3[["rank", "category", "hour"]].rename(
         columns={"rank": "Rank", "category": "Category", "hour": "Hour"}
     )
-    show_table(q3_display)
+    show_table(q3_display, {
+        "Rank": number_column(
+            "Rank", "Position of the hour within its category by descending recorded purchase amount."
+        ),
+        "Hour": st.column_config.TextColumn(
+            "Hour", help="Hour bucket selected among the top three for the category; displayed as HH00."
+        ),
+    })
 
 with tab4:
     st.subheader("Where the most popular merchants are located")
@@ -267,11 +326,31 @@ with tab4:
         "city_attempt_count": "City Transactions", "city_rank": "City Rank",
         "global_attempt_count": "Global Transactions",
     })
-    show_table(q4_display)
+    show_table(q4_display, {
+        "Global Rank": number_column(
+            "Global Rank", "Merchant position by total recorded attempts across every city."
+        ),
+        "City Transactions": number_column(
+            "City Transactions", "Recorded attempts for this merchant in this transaction city."
+        ),
+        "City Rank": number_column(
+            "City Rank", "Merchant position by recorded attempts within this transaction city."
+        ),
+        "Global Transactions": number_column(
+            "Global Transactions", "Recorded attempts for this merchant across all transaction cities."
+        ),
+    })
 
     association = load_table("q4_association").iloc[0]
     st.subheader("City and category association")
-    st.metric("Cramer's V", f"{association['cramers_v']:.4f}")
+    st.metric(
+        "Cramer's V",
+        f"{association['cramers_v']:.4f}",
+        help=(
+            "Association strength between transaction City ID and Category: "
+            "sqrt(chi-square / (population × min(cities−1, categories−1)))."
+        ),
+    )
     st.write(
         "The result indicates a weak descriptive association between transaction city and category. "
         "It does not show that location causes category demand. Unknown categories are retained, "
@@ -302,8 +381,18 @@ with tab5:
             "approved_count": "Approved Sales", "approved_share": "Approved Share",
         })
         show_table(city_table, {
-            "Approved Amount": currency_column("Approved Amount"),
-            "Approved Share": st.column_config.NumberColumn("Approved Share", format="percent"),
+            "Rank": number_column("Rank", "City position by descending Approved Amount."),
+            "Approved Amount": currency_column(
+                "Approved Amount", "Sum of purchase_amount for approved attempts in this city."
+            ),
+            "Approved Sales": number_column(
+                "Approved Sales", "Count of attempts with authorized_flag equal to Y in this city."
+            ),
+            "Approved Share": number_column(
+                "Approved Share",
+                "City Approved Amount divided by the approved amount across all cities.",
+                "percent",
+            ),
         })
     with right:
         st.subheader("b. Categories to sell")
@@ -321,8 +410,18 @@ with tab5:
             "approved_count": "Approved Sales", "approved_share": "Approved Share",
         })
         show_table(category_table, {
-            "Approved Amount": currency_column("Approved Amount"),
-            "Approved Share": st.column_config.NumberColumn("Approved Share", format="percent"),
+            "Rank": number_column("Rank", "Category position by descending Approved Amount."),
+            "Approved Amount": currency_column(
+                "Approved Amount", "Sum of purchase_amount for approved attempts in this category."
+            ),
+            "Approved Sales": number_column(
+                "Approved Sales", "Count of attempts with authorized_flag equal to Y in this category."
+            ),
+            "Approved Share": number_column(
+                "Approved Share",
+                "Category Approved Amount divided by the approved amount across all categories.",
+                "percent",
+            ),
         })
     left, right = st.columns(2)
     with left:
@@ -374,14 +473,41 @@ with tab5:
         "expected_profit_flat_lifetime": "Flat Lifetime Expected Profit",
     })
     show_table(installment_display, {
-        "Recorded Amount": currency_column("Recorded Amount"),
-        "Approved Amount": currency_column("Approved Amount"),
-        "Monthly Model Default Probability": st.column_config.NumberColumn(
-            "Monthly Model Default Probability", format="percent"
+        "Installments": number_column(
+            "Installments",
+            "Normalized payment count: source values 0 and 1 form the one-payment baseline; 999 is unknown.",
         ),
-        "Flat Lifetime Default Probability": st.column_config.NumberColumn(
-            "Flat Lifetime Default Probability", format="percent"
+        "Plan": st.column_config.TextColumn(
+            "Plan", help="Readable label derived from the normalized number of payments."
         ),
-        "Monthly Model Expected Profit": currency_column("Monthly Model Expected Profit"),
-        "Flat Lifetime Expected Profit": currency_column("Flat Lifetime Expected Profit"),
+        "Recorded Amount": currency_column(
+            "Recorded Amount", "Sum of purchase_amount for all attempts in this payment plan."
+        ),
+        "Recorded Attempts": number_column(
+            "Recorded Attempts", "Count of all source attempts in this payment plan."
+        ),
+        "Approved Amount": currency_column(
+            "Approved Amount", "Sum of purchase_amount for approved attempts in this payment plan."
+        ),
+        "Approved Attempts": number_column(
+            "Approved Attempts", "Count of attempts with authorized_flag equal to Y in this payment plan."
+        ),
+        "Monthly Model Default Probability": number_column(
+            "Monthly Model Default Probability",
+            "Cumulative probability under independent monthly default: 1 − 0.771^n.",
+            "percent",
+        ),
+        "Flat Lifetime Default Probability": number_column(
+            "Flat Lifetime Default Probability",
+            "Alternative scenario applying the 22.9% default probability once over the plan lifetime.",
+            "percent",
+        ),
+        "Monthly Model Expected Profit": currency_column(
+            "Monthly Model Expected Profit",
+            "Approved Amount × (25% gross margin − 50% × cumulative monthly default probability).",
+        ),
+        "Flat Lifetime Expected Profit": currency_column(
+            "Flat Lifetime Expected Profit",
+            "Approved Amount × (25% gross margin − 50% × 22.9% lifetime default probability).",
+        ),
     })
