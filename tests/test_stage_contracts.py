@@ -1,8 +1,10 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from pyspark.sql import functions as F
 
-from billups.common import require_paths
+from billups.common import add_load_metadata, require_paths
 from billups.gold import normalize_parquet_filename, quality_rows
 
 
@@ -51,3 +53,16 @@ def test_quality_rows_exposes_counts_rates_and_reconciliation():
     assert by_name["Rows dropped"][1:5] == ("Passed", 0, 100, 0.0)
     assert by_name["Missing merchant ID"][1:5] == ("Warning", 2, 100, 0.02)
     assert by_name["Merchant identity collisions"][3:5] == (None, None)
+
+
+def test_load_metadata_has_source_name_and_stage_timestamp(spark):
+    """Layer metadata records the source filename and UTC load instant."""
+    loaded_at = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+    frame = spark.createDataFrame([(1,)], ["value"])
+    enriched = add_load_metadata(frame, "bronze", loaded_at, "source.parquet")
+    row = enriched.first()
+    assert row["source_file_name"] == "source.parquet"
+    formatted = enriched.select(
+        F.date_format("bronze_load_timestamp", "yyyy-MM-dd HH:mm:ss").alias("loaded_at")
+    ).first()
+    assert formatted["loaded_at"] == "2026-01-02 03:04:05"

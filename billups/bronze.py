@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pyspark.sql import SparkSession
 
-from billups.common import build_spark, sha256, source_bytes, write_json
+from billups.common import add_load_metadata, build_spark, sha256, source_bytes, write_json
 
 
 def run(raw_dir: Path, output_dir: Path, spark: SparkSession | None = None) -> None:
@@ -22,8 +23,19 @@ def run(raw_dir: Path, output_dir: Path, spark: SparkSession | None = None) -> N
     spark = spark or build_spark("billups-bronze")
     output_dir.mkdir(parents=True, exist_ok=True)
     try:
-        transactions = spark.read.parquet(str(transaction_file))
-        merchants = spark.read.option("header", True).csv(str(merchant_file))
+        loaded_at = datetime.now(timezone.utc)
+        transactions = add_load_metadata(
+            spark.read.parquet(str(transaction_file)),
+            "bronze",
+            loaded_at,
+            transaction_file.name,
+        )
+        merchants = add_load_metadata(
+            spark.read.option("header", True).csv(str(merchant_file)),
+            "bronze",
+            loaded_at,
+            merchant_file.name,
+        )
         transactions.write.mode("overwrite").parquet(str(output_dir / "historical_transactions"))
         merchants.write.mode("overwrite").parquet(str(output_dir / "merchants"))
         provenance = {

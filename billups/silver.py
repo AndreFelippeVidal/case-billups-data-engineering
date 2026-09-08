@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ from pyspark import StorageLevel
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
-from billups.common import build_spark, json_value, require_paths, write_json
+from billups.common import add_load_metadata, build_spark, json_value, require_paths, write_json
 from billups.transforms import to_silver
 
 
@@ -46,10 +47,17 @@ def run(bronze_dir: Path, output_dir: Path, spark: SparkSession | None = None) -
         transactions = spark.read.parquet(str(bronze_dir / "historical_transactions"))
         merchants = spark.read.parquet(str(bronze_dir / "merchants"))
         result = to_silver(transactions, merchants)
-        cached = result.transactions.persist(StorageLevel.DISK_ONLY)
+        loaded_at = datetime.now(timezone.utc)
+        cached = add_load_metadata(
+            result.transactions, "silver", loaded_at
+        ).persist(StorageLevel.DISK_ONLY)
         cached.write.mode("overwrite").parquet(str(output_dir / "transactions"))
-        result.merchant_lookup.write.mode("overwrite").parquet(str(output_dir / "merchant_lookup"))
-        result.merchant_conflicts.write.mode("overwrite").parquet(str(output_dir / "merchant_conflicts"))
+        add_load_metadata(result.merchant_lookup, "silver", loaded_at).write.mode(
+            "overwrite"
+        ).parquet(str(output_dir / "merchant_lookup"))
+        add_load_metadata(result.merchant_conflicts, "silver", loaded_at).write.mode(
+            "overwrite"
+        ).parquet(str(output_dir / "merchant_conflicts"))
         write_json(output_dir / "dq.json", quality_metrics(cached, result.merchant_conflicts))
     finally:
         if cached is not None:

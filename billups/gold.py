@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
-from billups.common import build_spark, require_paths, write_json
+from billups.common import add_load_metadata, build_spark, require_paths, write_json
 from billups.report import render_previews, render_report
 from billups.transforms import gold_frames
 
@@ -157,10 +158,13 @@ def run(
     results_dir.mkdir(parents=True, exist_ok=True)
     cached = spark.read.parquet(str(silver_dir / "transactions")).persist(StorageLevel.DISK_ONLY)
     try:
+        loaded_at = datetime.now(timezone.utc)
         frames = gold_frames(cached)
         for name, frame in frames.items():
             table_dir = output_dir / name
-            frame.coalesce(1).write.mode("overwrite").parquet(str(table_dir))
+            add_load_metadata(frame, "gold", loaded_at).coalesce(1).write.mode(
+                "overwrite"
+            ).parquet(str(table_dir))
             normalize_parquet_filename(table_dir)
         persisted = {name: spark.read.parquet(str(output_dir / name)) for name in frames}
         reconciliation = reconcile(cached, persisted["q5_cities"])
@@ -177,7 +181,9 @@ def run(
         }
         for name, frame in quality_frames.items():
             table_dir = output_dir / name
-            frame.coalesce(1).write.mode("overwrite").parquet(str(table_dir))
+            add_load_metadata(frame, "gold", loaded_at).coalesce(1).write.mode(
+                "overwrite"
+            ).parquet(str(table_dir))
             normalize_parquet_filename(table_dir)
         render_report(persisted, results_dir / "report.md")
         render_previews(persisted, reconciliation, results_dir / "previews.md")

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import functions as F
 
 
 def build_spark(app_name: str) -> SparkSession:
@@ -24,6 +26,21 @@ def build_spark(app_name: str) -> SparkSession:
     )
     spark.sparkContext.setLogLevel("WARN")
     return spark
+
+
+def add_load_metadata(
+    frame: DataFrame,
+    stage: str,
+    loaded_at: datetime,
+    source_file_name: str | None = None,
+) -> DataFrame:
+    """Add consistent source and stage-load metadata columns."""
+    result = frame
+    if source_file_name is not None:
+        result = result.withColumn("source_file_name", F.lit(source_file_name))
+    return result.withColumn(
+        f"{stage}_load_timestamp", F.lit(loaded_at).cast("timestamp")
+    )
 
 
 def sha256(path: Path) -> str:

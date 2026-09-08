@@ -73,6 +73,37 @@ def ordered_bar_chart(frame: pd.DataFrame, category: str, value: str, category_l
     st.altair_chart(chart, use_container_width=True)
 
 
+def merchant_city_chart(frame: pd.DataFrame) -> None:
+    """Show each popular merchant's recorded attempts split across cities."""
+    chart_data = frame.copy()
+    chart_data["city_label"] = chart_data["city_id"].astype(str)
+    chart_data["city_share"] = (
+        chart_data["city_attempt_count"] / chart_data["global_attempt_count"]
+    )
+    merchant_order = (
+        chart_data.sort_values("global_rank")["merchant_name"].drop_duplicates().tolist()
+    )
+    chart = (
+        alt.Chart(chart_data)
+        .mark_bar()
+        .encode(
+            y=alt.Y("merchant_name:N", sort=merchant_order, title="Merchant"),
+            x=alt.X("sum(city_attempt_count):Q", title="Recorded Attempts"),
+            color=alt.Color("city_label:N", title="City ID"),
+            order=alt.Order("city_attempt_count:Q", sort="descending"),
+            tooltip=[
+                alt.Tooltip("merchant_name:N", title="Merchant"),
+                alt.Tooltip("city_label:N", title="City ID"),
+                alt.Tooltip("city_attempt_count:Q", title="City Transactions", format=","),
+                alt.Tooltip("city_share:Q", title="Merchant Share", format=".2%"),
+                alt.Tooltip("global_attempt_count:Q", title="Global Transactions", format=","),
+            ],
+        )
+        .properties(height=260)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+
 def hourly_demand_chart(frame: pd.DataFrame) -> None:
     """Display approved hourly demand and visually flag midnight."""
     chart_data = frame.copy()
@@ -211,6 +242,7 @@ with tab2:
     )
     q2_display = (
         load_table("q2_merchant_state").sort_values("average_amount", ascending=False).head(100)
+        [["merchant", "state_id", "average_amount"]]
         .rename(columns={"merchant": "Merchant", "state_id": "State ID", "average_amount": "Average Amount"})
     )
     show_table(q2_display, {"Average Amount": currency_column("Average Amount")})
@@ -236,6 +268,7 @@ with tab4:
     q4 = load_table("q4_popular_merchants").sort_values(
         ["global_rank", "city_attempt_count"], ascending=[True, False]
     )
+    merchant_city_chart(q4)
     q4_display = q4[
         ["global_rank", "merchant_name", "city_id", "city_attempt_count", "city_rank", "global_attempt_count"]
     ].rename(columns={
@@ -342,7 +375,12 @@ with tab5:
     )
     installments = load_table("q5_installments").sort_values("plan_installments")
     installment_profitability_chart(installments)
-    installment_display = installments.rename(columns={
+    installment_display = installments[[
+        "plan_installments", "installment_plan", "all_attempt_amount", "all_attempt_count",
+        "approved_amount", "approved_count", "monthly_default_probability",
+        "flat_lifetime_default_probability", "expected_profit_monthly",
+        "expected_profit_flat_lifetime",
+    ]].rename(columns={
         "plan_installments": "Installments", "installment_plan": "Plan",
         "all_attempt_amount": "Recorded Amount", "all_attempt_count": "Recorded Attempts",
         "approved_amount": "Approved Amount", "approved_count": "Approved Attempts",

@@ -54,4 +54,4 @@ These deterministic samples come from the generated Gold Parquet outputs.
 
 ## Reconciliation
 
-Silver and Gold reconcile at 7,274,367 rows and 146228071619.260000 total amount.
+Silver and Gold reconcile at 7,274,367 rows and 146228071619.26 total amount.

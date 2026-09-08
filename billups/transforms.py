@@ -9,7 +9,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import DecimalType
 
 
-MONEY = DecimalType(28, 6)
+MONEY = DecimalType(28, 2)
 TRANSACTION_COLUMNS = {
     "merchant_id",
     "purchase_date",

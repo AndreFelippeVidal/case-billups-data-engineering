@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 from billups.transforms import to_silver
@@ -75,3 +77,12 @@ def test_silver_rejects_empty_transactions(spark):
     merchants = spark.createDataFrame([("m1", "Known")], ["merchant_id", "merchant_name"])
     with pytest.raises(ValueError, match="empty"):
         to_silver(tx, merchants)
+
+
+def test_silver_rounds_purchase_amount_to_two_decimal_places(spark):
+    """Silver stores purchase amounts at two-decimal source-of-truth precision."""
+    tx = spark.createDataFrame([transaction(amount="10.126")], TX_COLUMNS)
+    merchants = spark.createDataFrame([("m1", "Known")], ["merchant_id", "merchant_name"])
+    row = to_silver(tx, merchants).transactions.first()
+    assert row["purchase_amount"] == Decimal("10.13")
+    assert row["purchase_amount"].as_tuple().exponent == -2

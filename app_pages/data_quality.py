@@ -84,7 +84,9 @@ st.info(
 )
 
 st.subheader("Quality check results")
-summary_display = summary.rename(columns={
+summary_display = summary[[
+    "check_name", "status", "result_count", "population_count", "result_rate", "description"
+]].rename(columns={
     "check_name": "Check", "status": "Status", "result_count": "Affected Rows",
     "population_count": "Population", "result_rate": "Rate", "description": "Meaning",
 })
@@ -107,7 +109,7 @@ st.write(
     "The Silver logic uses the merchant ID as the display name for these records, avoiding an arbitrary "
     "name choice and preserving a many-to-one transaction join."
 )
-conflict_display = conflicts.copy()
+conflict_display = conflicts[["merchant_id", "nonblank_names", "distinct_name_count"]].copy()
 conflict_display["nonblank_names"] = conflict_display["nonblank_names"].map(
     lambda values: " | ".join(values)
 )
@@ -124,9 +126,10 @@ st.write(
 )
 available_checks = samples["check_name"].drop_duplicates().tolist()
 selected_check = st.selectbox("Warning condition", available_checks)
-sample_display = samples[samples["check_name"] == selected_check].drop(
-    columns=["check_name", "sample_rank"]
-).rename(columns={
+sample_display = samples[samples["check_name"] == selected_check][[
+    "merchant_id", "merchant_name", "purchase_date", "city_id", "state_id", "category",
+    "installments", "authorized_flag", "purchase_amount",
+]].rename(columns={
     "merchant_id": "Merchant ID", "merchant_name": "Merchant", "purchase_date": "Purchase Date",
     "city_id": "City ID", "state_id": "State ID", "category": "Category",
     "installments": "Installments", "authorized_flag": "Authorized",

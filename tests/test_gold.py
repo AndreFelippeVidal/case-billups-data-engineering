@@ -55,7 +55,7 @@ def test_q2_uses_arithmetic_mean_at_merchant_state_grain(spark):
     result = q2_merchant_state(silver_fixture(spark))
     row = result.filter("merchant = 'Merchant 1' and state_id = 1").first()
     assert result.columns == ["merchant", "state_id", "average_amount"]
-    assert row["average_amount"] == Decimal("26.6666666667")
+    assert row["average_amount"] == Decimal("26.666667")
 
 
 def test_q3_exact_top_three_with_hour_tie_break(spark):
