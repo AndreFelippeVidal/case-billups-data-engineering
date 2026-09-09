@@ -188,7 +188,7 @@ def run(
         render_report(persisted, results_dir / "report.md")
         render_previews(persisted, reconciliation, results_dir / "previews.md")
     finally:
-        cached.unpersist()
+        cached.unpersist(blocking=True)
         if owns_spark:
             spark.stop()
 

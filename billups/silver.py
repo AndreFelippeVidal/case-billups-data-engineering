@@ -61,7 +61,7 @@ def run(bronze_dir: Path, output_dir: Path, spark: SparkSession | None = None) -
         write_json(output_dir / "dq.json", quality_metrics(cached, result.merchant_conflicts))
     finally:
         if cached is not None:
-            cached.unpersist()
+            cached.unpersist(blocking=True)
         if owns_spark:
             spark.stop()
 

@@ -20,10 +20,14 @@ def run(
     spark = build_spark("billups-local-pipeline")
     try:
         bronze.run(raw_dir, bronze_dir, spark)
+        print("Bronze stage completed.", flush=True)
         silver.run(bronze_dir, silver_dir, spark)
+        print("Silver stage completed.", flush=True)
         gold.run(silver_dir, gold_dir, results_dir, spark)
+        print("Gold stage completed.", flush=True)
     finally:
         spark.stop()
+    print("Pipeline completed successfully.", flush=True)
 
 
 def main() -> None:

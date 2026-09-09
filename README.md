@@ -128,6 +128,17 @@ Run the complete full-refresh pipeline with one command:
 uv run python -m billups.pipeline
 ```
 
+The run can take a few minutes on a laptop. Spark writes progress and warnings to the terminal while it works. Keep the process running until it prints:
+
+```text
+Bronze stage completed.
+Silver stage completed.
+Gold stage completed.
+Pipeline completed successfully.
+```
+
+Messages beginning with `WARN`, including the local hostname, native Hadoop library, and unpartitioned global-window messages, are expected in local mode. The global windows run only after Spark has reduced the source to small Gold aggregates. A real pipeline failure exits with a nonzero status and includes a Python `Traceback` before the success message.
+
 Every trigger replaces the generated layers and reports with outputs from the current raw inputs:
 
 ```text
