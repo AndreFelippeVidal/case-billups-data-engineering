@@ -234,3 +234,15 @@ uv run pytest -q
 ## Data handling
 
 `data/raw`, `data/bronze`, and `data/silver` are ignored by Git. Their directories can exist locally without committing source or intermediate data. Only the final Gold data under `data/gold` is committed. The dashboard has no dependency on raw, Bronze, or Silver files.
+
+## Dashboard preview
+
+The dashboard can be reviewed from the committed Gold outputs. These screenshots provide a quick preview before running Streamlit locally.
+
+### Business overview
+
+![Billups dashboard business overview](assets/Dashboard1.png)
+
+### Merchant recommendations
+
+![Billups dashboard city and category recommendations](assets/Dashboard2.png)
