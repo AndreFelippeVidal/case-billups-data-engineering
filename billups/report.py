@@ -51,6 +51,8 @@ def render_report(gold: dict[str, DataFrame], destination: Path) -> dict[str, An
     lines = [
         "# Billups historical transaction analysis",
         "",
+        "> **Dashboard:** For deeper analysis, interactive filters, and additional charts, run the Streamlit dashboard described in the README.",
+        "",
         "This report answers the five questions in the supplied case. A recorded attempt is every source row regardless of authorization; an approved attempt is a row with `authorized_flag = Y` and is the closer proxy for realized sales. The source has no unique transaction ID, so counts are attempts rather than deduplicated purchases.",
         "",
         "## Gold business overview",
