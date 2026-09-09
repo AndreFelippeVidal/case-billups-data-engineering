@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from pyspark import StorageLevel
@@ -13,9 +15,12 @@ from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
-from billups.common import add_load_metadata, build_spark, require_paths, write_json
+from billups.common import add_load_metadata, build_spark, configure_logging, require_paths, write_json
 from billups.report import render_previews, render_report
 from billups.transforms import gold_frames
+
+
+LOGGER = logging.getLogger("billups.gold")
 
 
 QUALITY_SCHEMA = T.StructType(
@@ -148,27 +153,37 @@ def run(
     spark: SparkSession | None = None,
 ) -> None:
     """Overwrite Gold business tables, reconciliation, and reports."""
-    require_paths(
-        [silver_dir / "transactions", silver_dir / "merchant_conflicts", silver_dir / "dq.json"],
-        "Gold",
-    )
+    started = perf_counter()
+    LOGGER.info("Starting Gold stage: silver=%s output=%s", silver_dir, output_dir)
     owns_spark = spark is None
-    spark = spark or build_spark("billups-gold")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    results_dir.mkdir(parents=True, exist_ok=True)
-    cached = spark.read.parquet(str(silver_dir / "transactions")).persist(StorageLevel.DISK_ONLY)
+    cached = None
     try:
+        require_paths(
+            [silver_dir / "transactions", silver_dir / "merchant_conflicts", silver_dir / "dq.json"],
+            "Gold",
+        )
+        spark = spark or build_spark("billups-gold")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        results_dir.mkdir(parents=True, exist_ok=True)
+        LOGGER.info("Reading and persisting Silver transactions")
+        cached = spark.read.parquet(str(silver_dir / "transactions")).persist(
+            StorageLevel.DISK_ONLY
+        )
         loaded_at = datetime.now(timezone.utc)
+        LOGGER.info("Building Gold business transformations")
         frames = gold_frames(cached)
         for name, frame in frames.items():
             table_dir = output_dir / name
+            LOGGER.info("Writing Gold business table: %s", name)
             add_load_metadata(frame, "gold", loaded_at).coalesce(1).write.mode(
                 "overwrite"
             ).parquet(str(table_dir))
             normalize_parquet_filename(table_dir)
         persisted = {name: spark.read.parquet(str(output_dir / name)) for name in frames}
+        LOGGER.info("Reconciling Gold row count and amount against Silver")
         reconciliation = reconcile(cached, persisted["q5_cities"])
         write_json(output_dir / "reconciliation.json", reconciliation)
+        LOGGER.info("Building Gold data-quality presentation tables")
         metrics = json.loads((silver_dir / "dq.json").read_text(encoding="utf-8"))
         quality_frames = {
             "data_quality_summary": spark.createDataFrame(
@@ -181,20 +196,28 @@ def run(
         }
         for name, frame in quality_frames.items():
             table_dir = output_dir / name
+            LOGGER.info("Writing Gold quality table: %s", name)
             add_load_metadata(frame, "gold", loaded_at).coalesce(1).write.mode(
                 "overwrite"
             ).parquet(str(table_dir))
             normalize_parquet_filename(table_dir)
+        LOGGER.info("Rendering analytical report and bounded previews")
         render_report(persisted, results_dir / "report.md")
         render_previews(persisted, reconciliation, results_dir / "previews.md")
+    except Exception:
+        LOGGER.error("Gold stage failed after %.1f seconds", perf_counter() - started)
+        raise
     finally:
-        cached.unpersist(blocking=True)
-        if owns_spark:
+        if cached is not None:
+            cached.unpersist(blocking=True)
+        if owns_spark and spark is not None:
             spark.stop()
+    LOGGER.info("Gold stage completed in %.1f seconds", perf_counter() - started)
 
 
 def main() -> None:
     """Run the Silver-to-Gold command-line stage."""
+    configure_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument("--silver-dir", type=Path, default=Path("data/silver"))
     parser.add_argument("--output-dir", type=Path, default=Path("data/gold"))

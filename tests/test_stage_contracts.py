@@ -1,9 +1,12 @@
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from pyspark.sql import functions as F
 
+from billups import bronze, pipeline
 from billups.common import add_load_metadata, require_paths
 from billups.gold import normalize_parquet_filename, quality_rows
 
@@ -66,3 +69,41 @@ def test_load_metadata_has_source_name_and_stage_timestamp(spark):
         F.date_format("bronze_load_timestamp", "yyyy-MM-dd HH:mm:ss").alias("loaded_at")
     ).first()
     assert formatted["loaded_at"] == "2026-01-02 03:04:05"
+
+
+def test_bronze_logs_stage_failure(caplog, tmp_path: Path):
+    """Bronze logs its stage boundary when required inputs are missing."""
+    caplog.set_level(logging.INFO, logger="billups.bronze")
+    with pytest.raises(FileNotFoundError):
+        bronze.run(tmp_path / "raw", tmp_path / "bronze")
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(message.startswith("Starting Bronze stage") for message in messages)
+    assert any(message.startswith("Bronze stage failed") for message in messages)
+
+
+def test_pipeline_logs_successful_stage_sequence(caplog, monkeypatch, tmp_path: Path):
+    """The complete runner logs an explicit final success boundary."""
+    class FakeSpark:
+        """Provide the stop operation used by the pipeline runner."""
+
+        def stop(self) -> None:
+            """Record a no-op Spark shutdown."""
+
+    fake_spark = FakeSpark()
+    monkeypatch.setattr(pipeline, "build_spark", Mock(return_value=fake_spark))
+    monkeypatch.setattr(pipeline.bronze, "run", Mock())
+    monkeypatch.setattr(pipeline.silver, "run", Mock())
+    monkeypatch.setattr(pipeline.gold, "run", Mock())
+    caplog.set_level(logging.INFO, logger="billups.pipeline")
+
+    pipeline.run(
+        tmp_path / "raw",
+        tmp_path / "bronze",
+        tmp_path / "silver",
+        tmp_path / "gold",
+        tmp_path / "results",
+    )
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert messages[0] == "Starting complete Bronze-Silver-Gold pipeline"
+    assert messages[-1].startswith("Pipeline completed successfully")

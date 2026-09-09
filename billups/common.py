@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -11,6 +12,16 @@ from typing import Any
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
+
+
+def configure_logging() -> None:
+    """Configure concise operational logs for command-line pipeline runs."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    logging.getLogger("py4j").setLevel(logging.WARNING)
 
 
 def build_spark(app_name: str) -> SparkSession:

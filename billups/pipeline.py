@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
+from time import perf_counter
 
 from billups import bronze, gold, silver
-from billups.common import build_spark
+from billups.common import build_spark, configure_logging
+
+
+LOGGER = logging.getLogger("billups.pipeline")
 
 
 def run(
@@ -17,21 +22,26 @@ def run(
     results_dir: Path,
 ) -> None:
     """Overwrite Bronze, Silver, Gold, and reports in dependency order."""
-    spark = build_spark("billups-local-pipeline")
+    started = perf_counter()
+    LOGGER.info("Starting complete Bronze-Silver-Gold pipeline")
+    spark = None
     try:
+        spark = build_spark("billups-local-pipeline")
         bronze.run(raw_dir, bronze_dir, spark)
-        print("Bronze stage completed.", flush=True)
         silver.run(bronze_dir, silver_dir, spark)
-        print("Silver stage completed.", flush=True)
         gold.run(silver_dir, gold_dir, results_dir, spark)
-        print("Gold stage completed.", flush=True)
+    except Exception:
+        LOGGER.error("Pipeline failed after %.1f seconds", perf_counter() - started)
+        raise
     finally:
-        spark.stop()
-    print("Pipeline completed successfully.", flush=True)
+        if spark is not None:
+            spark.stop()
+    LOGGER.info("Pipeline completed successfully in %.1f seconds", perf_counter() - started)
 
 
 def main() -> None:
     """Run the complete pipeline from the command line."""
+    configure_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
     parser.add_argument("--bronze-dir", type=Path, default=Path("data/bronze"))

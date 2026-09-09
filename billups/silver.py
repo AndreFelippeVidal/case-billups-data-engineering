@@ -3,16 +3,28 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from pyspark import StorageLevel
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
-from billups.common import add_load_metadata, build_spark, json_value, require_paths, write_json
+from billups.common import (
+    add_load_metadata,
+    build_spark,
+    configure_logging,
+    json_value,
+    require_paths,
+    write_json,
+)
 from billups.transforms import to_silver
+
+
+LOGGER = logging.getLogger("billups.silver")
 
 
 def quality_metrics(silver: DataFrame, conflicts: DataFrame) -> dict[str, Any]:
@@ -36,38 +48,50 @@ def quality_metrics(silver: DataFrame, conflicts: DataFrame) -> dict[str, Any]:
 
 def run(bronze_dir: Path, output_dir: Path, spark: SparkSession | None = None) -> None:
     """Overwrite validated and merchant-enriched Silver outputs."""
-    require_paths(
-        [bronze_dir / "historical_transactions", bronze_dir / "merchants"], "Silver"
-    )
+    started = perf_counter()
+    LOGGER.info("Starting Silver stage: bronze=%s output=%s", bronze_dir, output_dir)
     owns_spark = spark is None
-    spark = spark or build_spark("billups-silver")
-    output_dir.mkdir(parents=True, exist_ok=True)
     cached = None
     try:
+        require_paths(
+            [bronze_dir / "historical_transactions", bronze_dir / "merchants"], "Silver"
+        )
+        spark = spark or build_spark("billups-silver")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        LOGGER.info("Reading Bronze transactions and merchant metadata")
         transactions = spark.read.parquet(str(bronze_dir / "historical_transactions"))
         merchants = spark.read.parquet(str(bronze_dir / "merchants"))
+        LOGGER.info("Validating, normalizing, and enriching transaction attempts")
         result = to_silver(transactions, merchants)
         loaded_at = datetime.now(timezone.utc)
         cached = add_load_metadata(
             result.transactions, "silver", loaded_at
         ).persist(StorageLevel.DISK_ONLY)
+        LOGGER.info("Writing Silver transactions with overwrite mode")
         cached.write.mode("overwrite").parquet(str(output_dir / "transactions"))
+        LOGGER.info("Writing Silver merchant lookup and conflict evidence")
         add_load_metadata(result.merchant_lookup, "silver", loaded_at).write.mode(
             "overwrite"
         ).parquet(str(output_dir / "merchant_lookup"))
         add_load_metadata(result.merchant_conflicts, "silver", loaded_at).write.mode(
             "overwrite"
         ).parquet(str(output_dir / "merchant_conflicts"))
+        LOGGER.info("Calculating full-population Silver quality metrics")
         write_json(output_dir / "dq.json", quality_metrics(cached, result.merchant_conflicts))
+    except Exception:
+        LOGGER.error("Silver stage failed after %.1f seconds", perf_counter() - started)
+        raise
     finally:
         if cached is not None:
             cached.unpersist(blocking=True)
-        if owns_spark:
+        if owns_spark and spark is not None:
             spark.stop()
+    LOGGER.info("Silver stage completed in %.1f seconds", perf_counter() - started)
 
 
 def main() -> None:
     """Run the Bronze-to-Silver command-line stage."""
+    configure_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument("--bronze-dir", type=Path, default=Path("data/bronze"))
     parser.add_argument("--output-dir", type=Path, default=Path("data/silver"))

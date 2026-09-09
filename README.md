@@ -128,16 +128,16 @@ Run the complete full-refresh pipeline with one command:
 uv run python -m billups.pipeline
 ```
 
-The run can take a few minutes on a laptop. Spark writes progress and warnings to the terminal while it works. Keep the process running until it prints:
+The run can take a few minutes on a laptop. The pipeline writes timestamped operational logs for stage starts, reads, transformations, writes, validations, failures, and elapsed time. Spark also writes its own progress and warnings. Keep the process running until the final success log appears:
 
 ```text
-Bronze stage completed.
-Silver stage completed.
-Gold stage completed.
-Pipeline completed successfully.
+2026-09-09 10:00:00 | INFO | billups.bronze | Bronze stage completed in 10.0 seconds
+2026-09-09 10:01:00 | INFO | billups.silver | Silver stage completed in 60.0 seconds
+2026-09-09 10:02:00 | INFO | billups.gold | Gold stage completed in 60.0 seconds
+2026-09-09 10:02:00 | INFO | billups.pipeline | Pipeline completed successfully in 130.0 seconds
 ```
 
-Messages beginning with `WARN`, including the local hostname, native Hadoop library, and unpartitioned global-window messages, are expected in local mode. The global windows run only after Spark has reduced the source to small Gold aggregates. A real pipeline failure exits with a nonzero status and includes a Python `Traceback` before the success message.
+Standalone `billups.bronze`, `billups.silver`, and `billups.gold` commands produce the same stage-level logs. Messages beginning with `WARN`, including the local hostname, native Hadoop library, and unpartitioned global-window messages, are expected in local mode. The global windows run only after Spark has reduced the source to small Gold aggregates. A real pipeline failure emits an `ERROR` log, exits with a nonzero status, and includes a Python `Traceback` instead of the final success log.
 
 Every trigger replaces the generated layers and reports with outputs from the current raw inputs:
 
