@@ -355,6 +355,17 @@ def q5_opening_hours(hours: DataFrame, target_share: float = 0.8) -> DataFrame:
         )
     )
 
+# return (
+#         transactions
+#         .filter(F.col("authorized_flag") == "Y")
+#         .groupBy(F.hour("purchase_date").alias("hour"))
+#         .agg(
+#             F.sum("purchase_amount").alias("approved_amount"),
+#             F.count("*").alias("approved_sales"),
+#         )
+#         .orderBy("hour")
+#     )
+
 
 def q5_overview(silver: DataFrame) -> DataFrame:
     """Build whole-population business and authorization KPIs."""

@@ -173,7 +173,7 @@ overview_values = load_table("q5_overview").iloc[0]
 opening_hours = load_table("q5_opening_hours").iloc[0]
 leading_city_ids = ", ".join(str(value) for value in q5_cities.head(5)["city_id"])
 leading_categories = ", ".join(
-    str(value) for value in q5_categories[q5_categories["category"] != "Unknown category"].head(3)["category"]
+    str(value) for value in q5_categories[q5_categories["category"] != "Unknown category"].head(2)["category"]
 )
 leading_months = (
     q5_months.sort_values("exposure_adjusted_rank")
